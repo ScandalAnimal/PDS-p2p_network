@@ -4,7 +4,7 @@ import socket
 import sys
 from parsers import parsePeerArgs
 
-print 'PEER'
+print ('PEER')
 
 args = parsePeerArgs()
 
@@ -22,25 +22,25 @@ class Peer:
 			', regIp: ' + self.regIp + ', regPort: ' + str(self.regPort))	
 
 peer = Peer(args)
-print 'Peer:', str(peer)
+print ('Peer:' + str(peer))
 
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-server_address = ('localhost', 10000)
-message = 'This is the message.  It will be repeated.'
+server_address = (peer.regIp, peer.regPort)
+message = "This is the message.  It will be repeated."
 
 try:
 
     # Send data
-    print >> sys.stderr, 'sending "%s"' % message
-    sent = sock.sendto(message, server_address)
+    print ('sending "%s"' % message)
+    sent = sock.sendto(message.encode('utf-8'), server_address)
 
     # Receive response
-    print >> sys.stderr, 'waiting to receive'
+    print ('waiting to receive')
     data, server = sock.recvfrom(4096)
-    print >> sys.stderr, 'received "%s"' % data
+    print ('received "%s"' % data.decode('utf-8'))
 
 finally:
-    print >> sys.stderr, 'closing socket'
+    print ('closing socket')
     sock.close()

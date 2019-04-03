@@ -7,9 +7,17 @@ from parsers import parseNodeArgs
 print 'NODE'
 
 args = parseNodeArgs()
-print 'ARGS: ', str(args)
 
+class Node:
+	def __init__(self, args):
+		self.id = args.id
+		self.regIp = args.reg_ipv4
+		self.regPort = args.reg_port
+	def __str__(self):
+		return ('Id: ' + str(self.id) + ', regIp: ' + self.regIp + ', regPort: ' + str(self.regPort))	
 
+node = Node(args)
+print 'Node:', str(node)
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 

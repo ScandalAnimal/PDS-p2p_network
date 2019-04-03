@@ -18,3 +18,4 @@ def parseNodeArgs():
 	parser.add_argument('--reg-ipv4', type=str, required=True, help='Address of reg node', metavar='reg-ipv4')
 	parser.add_argument('--reg-port', type=int, required=True, help='Port of reg node', metavar='reg-port')
 	return parser.parse_args()
+

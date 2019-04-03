@@ -2,6 +2,6 @@
 
 import sys
 
-print 'RPC'
-print 'Number of arguments:', len(sys.argv), 'arguments.'
-print 'Argument List:', str(sys.argv)
+print "RPC"
+print "Number of arguments:", len(sys.argv), "arguments."
+print "Argument List:", str(sys.argv)

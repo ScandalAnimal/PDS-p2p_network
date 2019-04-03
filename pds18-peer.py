@@ -4,7 +4,7 @@ import socket
 import sys
 from parsers import parsePeerArgs
 
-print ('PEER')
+print ("PEER")
 
 args = parsePeerArgs()
 
@@ -17,12 +17,12 @@ class Peer:
 		self.regIp = args.reg_ipv4
 		self.regPort = args.reg_port
 	def __str__(self):
-		return ('Id: ' + str(self.id) + ', username: ' + self.username + 
-			', chatIp: ' + self.chatIp + ', chatPort: ' + str(self.chatPort) + 
-			', regIp: ' + self.regIp + ', regPort: ' + str(self.regPort))	
+		return ("Id: " + str(self.id) + ", username: " + self.username + 
+			", chatIp: " + self.chatIp + ", chatPort: " + str(self.chatPort) + 
+			", regIp: " + self.regIp + ", regPort: " + str(self.regPort))	
 
 peer = Peer(args)
-print ('Peer:' + str(peer))
+print ("Peer:" + str(peer))
 
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -33,14 +33,14 @@ message = "This is the message.  It will be repeated."
 try:
 
     # Send data
-    print ('sending "%s"' % message)
-    sent = sock.sendto(message.encode('utf-8'), server_address)
+    print ("sending "%s"" % message)
+    sent = sock.sendto(message.encode("utf-8"), server_address)
 
     # Receive response
-    print ('waiting to receive')
+    print ("waiting to receive")
     data, server = sock.recvfrom(4096)
-    print ('received "%s"' % data.decode('utf-8'))
+    print ("received "%s"" % data.decode("utf-8"))
 
 finally:
-    print ('closing socket')
+    print ("closing socket")
     sock.close()

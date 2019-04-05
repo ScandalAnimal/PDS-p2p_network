@@ -10,6 +10,12 @@ class Parent:
 		params = vars(self)
 		return {k.encode("utf-8"):v for k,v in params.items()}
 
+class PeerRecord(Parent):
+	def __init__(self, username, ipv4, port):
+		self.username = username
+		self.ipv4 = ipv4
+		self.port = port
+
 class Hello(Parent):
 	def __init__(self, txid, username, ipv4, port):
 		self.type = "hello"
@@ -115,7 +121,5 @@ def decodeMessage(message):
 		return Error(decoded["txid"], decoded["verbose"])
 	else:
 		raise ValueError("Allowed types are hello, getlist, list, message, update, disconnect, ack, error; not %s", decoded["type"])
-
-# PEER_RECORD := {"<ushort>":{"username":"<string>", "ipv4":"<dotted_decimal_IP>", "port": <ushort>}}
 
 # DB_RECORD := {"<dotted_decimal_IP>,<ushort_port>":{<PEER_RECORD*>}}

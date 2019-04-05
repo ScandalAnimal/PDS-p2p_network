@@ -3,22 +3,36 @@
 import socket
 import sys
 import signal
+from datetime import datetime, timedelta
 from parsers import parseNodeArgs
 from util import ServiceException, signalHandler
 from protocol import decodeMessage
+
+
+class PeerRecord:
+	def __init__(self, username, ipv4, port, time):
+		self.username = username
+		self.ipv4 = ipv4
+		self.port = port
+		self.time = time
+
+class Node:
+	def __init__(self, args):
+		self.id = args.id
+		self.regIp = args.reg_ipv4
+		self.regPort = args.reg_port
+		self.peerCount = 0
+		self.peerList = {}
+	def __str__(self):
+		return ("Id: " + str(self.id) + ", regIp: " + self.regIp + ", regPort: " + str(self.regPort) + 
+			"Peer count: " + str(self.peerCount) + ", Peer list: " + str(self.peerList))
+	def printPeerRecords(self):
+		print (str(self.peerList))			
 
 def main():
 	print ("NODE")
 
 	args = parseNodeArgs()
-
-	class Node:
-		def __init__(self, args):
-			self.id = args.id
-			self.regIp = args.reg_ipv4
-			self.regPort = args.reg_port
-		def __str__(self):
-			return ("Id: " + str(self.id) + ", regIp: " + self.regIp + ", regPort: " + str(self.regPort))	
 
 	node = Node(args)
 	print ("Node:" + str(node))
@@ -38,8 +52,41 @@ def main():
 			data, address = sock.recvfrom(4096)
 			
 			# print ("received %s bytes from %s" % (len(data.decode("utf-8")), address))
-			print (decodeMessage(data.decode("utf-8")).getVars())
-			
+			message = decodeMessage(data.decode("utf-8")).getVars()
+			if message["type"] == "hello":
+				print ("DOSTAL SOM HELLO")
+				
+				duplicity = False
+				toDelete = 0
+				for k,v in node.peerList.items():
+					if v["username"] == message["username"]:
+						if message["ipv4"] == "0.0.0.0" and message["port"] == 0:
+							toDelete = k
+							duplicity = True
+						else:	
+							duplicity = True
+							v["time"] = datetime.now()
+							break	
+				if toDelete != 0:
+					del node.peerList[toDelete]
+
+
+				if not duplicity:
+					node.peerList[str(node.peerCount)] = vars(PeerRecord(message["username"], message["ipv4"], message["port"], datetime.now()))
+					node.peerCount += 1
+
+			else:
+				print ("DOSTAL som nieco ine")	
+
+			# for k,v in node.peerList.items():
+			# 	now = datetime.now() - timedelta(seconds=30)
+			# 	time = v["time"]
+			# 	if now > time:
+			# 		del node.peerList[k]
+
+			print ("**")
+			node.printPeerRecords()
+			print ("**")
 			# TODO toto pouzit na ACK
 			# if data:
 				# sent = sock.sendto(data, address)

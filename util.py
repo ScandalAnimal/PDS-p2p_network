@@ -12,3 +12,10 @@ def signalHandler(signum, frame):
 # TODO replace with ushort?
 def getRandomId():
 	return str(uuid.uuid4()).replace("-","") 	
+
+
+def decodeBytes(obj):
+    if isinstance(obj, bytes):
+        return obj.decode("utf-8")
+    else:
+    	return obj	

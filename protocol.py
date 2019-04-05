@@ -1,8 +1,11 @@
 #!/usr/bin/python
 
-from bencoder import encode
+from bencoder import encode, decode
+from util import decodeBytes
 
 class Parent:
+	def getVars(self):
+		return vars(self)
 	def toJson(self):
 		params = vars(self)
 		return {k.encode("utf-8"):v for k,v in params.items()}
@@ -59,38 +62,59 @@ class Error(Parent):
 		self.txid = txid
 		self.verbose = verbose
 
-def getHELLOMessage(txid, username, ipv4, port):
+def encodeHELLOMessage(txid, username, ipv4, port):
 	message = Hello(txid, username, ipv4, port)
 	return (encode(message.toJson()).decode())
 
-def getGETLISTMessage(txid):
+def encodeGETLISTMessage(txid):
 	message = GetList(txid)
-	print (encode(message.toJson()).decode())
+	return (encode(message.toJson()).decode())
 
-def getLISTMessage(txid, peers):
+def encodeLISTMessage(txid, peers):
 	message = List(txid, peers)
-	print (encode(message.toJson()).decode())
+	return (encode(message.toJson()).decode())
 
-def getMESSAGEMessage(txid, fromIp, to, message):
+def encodeMESSAGEMessage(txid, fromIp, to, message):
 	message = Message(txid, fromIp, to, message)
-	print (encode(message.toJson()).decode())
+	return (encode(message.toJson()).decode())
 
-def getUPDATEMessage(txid, db):
+def encodeUPDATEMessage(txid, db):
 	message = Update(txid, db)
-	print (encode(message.toJson()).decode())
+	return (encode(message.toJson()).decode())
 
-def getDISCONNECTMessage(txid):
+def encodeDISCONNECTMessage(txid):
 	message = Disconnect(txid)
-	print (encode(message.toJson()).decode())
+	return (encode(message.toJson()).decode())
 
-def getACKMessage(txid):
+def encodeACKMessage(txid):
 	message = Ack(txid)
-	print (encode(message.toJson()).decode())
+	return (encode(message.toJson()).decode())
 
-def getERRORMessage(txid, verbose):
+def encodeERRORMessage(txid, verbose):
 	message = Error(txid, verbose)
-	print (encode(message.toJson()).decode())
+	return (encode(message.toJson()).decode())
 
+# TODO co ak pridu spravne typy sprav ale chybne ine hodnoty? napriklad chybajuce, nebude NPE?
+def decodeMessage(message):
+	decoded = {k.decode("utf-8"):decodeBytes(v) for k,v in decode(message).items()}
+	if (decoded["type"] == "hello"):
+		return Hello(decoded["txid"], decoded["username"], decoded["ipv4"], decoded["port"])
+	elif (decoded["type"] == "getlist"):
+		return GetList(decoded["txid"])
+	elif (decoded["type"] == "list"):
+		return List(decoded["txid"], decoded["peers"])
+	elif (decoded["type"] == "message"):
+		return Message(decoded["txid"], decoded["from"], decoded["to"], decoded["message"])
+	elif (decoded["type"] == "update"):
+		return Update(decoded["txid"], decoded["db"])
+	elif (decoded["type"] == "disconnect"):
+		return Disconnect(decoded["txid"])
+	elif (decoded["type"] == "ack"):
+		return Ack(decoded["txid"])
+	elif (decoded["type"] == "error"):
+		return Error(decoded["txid"], decoded["verbose"])
+	else:
+		raise ValueError("Allowed types are hello, getlist, list, message, update, disconnect, ack, error; not %s", decoded["type"])
 
 # PEER_RECORD := {"<ushort>":{"username":"<string>", "ipv4":"<dotted_decimal_IP>", "port": <ushort>}}
 

@@ -6,13 +6,13 @@ import sys
 import threading
 import time
 from parsers import parsePeerArgs
-from protocol import getHELLOMessage
+from protocol import encodeHELLOMessage
 from util import ServiceException, signalHandler, getRandomId
-# , getGETLISTMessage, getLISTMessage, getMESSAGEMessage, getUPDATEMessage, getDISCONNECTMessage, getACKMessage, getERRORMessage
+# , encodeGETLISTMessage, encodeLISTMessage, encodeMESSAGEMessage, encodeUPDATEMessage, encodeDISCONNECTMessage, encodeACKMessage, encodeERRORMessage
 
 helloEvent = threading.Event()
 
-def sendHello(sock, server_address, message):
+def sendHello(sock, server_address, message, username):
 	while not helloEvent.is_set():
 		print ("sending %s" % message)
 		sent = sock.sendto(message.encode("utf-8"), server_address)
@@ -20,7 +20,7 @@ def sendHello(sock, server_address, message):
 
 	# TODO ... Clean shutdown code here ...
 	# nulove HELLO pri kille
-	message = getHELLOMessage(getRandomId(), peer.username, "0.0.0.0", 0)
+	message = encodeHELLOMessage(getRandomId(), username, "0.0.0.0", 0)
 	print ("hello: " + message)
 	sent = sock.sendto(message.encode("utf-8"), server_address)
 
@@ -38,51 +38,55 @@ class Peer:
 			", regIp: " + self.regIp + ", regPort: " + str(self.regPort))	
 
 
-print ("PEER")
+def main():
+	print ("PEER")
 
-args = parsePeerArgs()
+	args = parsePeerArgs()
 
-peer = Peer(args)
-print ("Peer:" + str(peer))
+	peer = Peer(args)
+	print ("Peer:" + str(peer))
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-server_address = (peer.regIp, peer.regPort)
+	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	server_address = (peer.regIp, peer.regPort)
 
-signal.signal(signal.SIGINT, signalHandler)
+	signal.signal(signal.SIGINT, signalHandler)
 
-try:
+	try:
 
-	helloMessage = getHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
-	print ("hello: " + helloMessage)
-	helloThread = threading.Thread(target=sendHello, args=(sock, server_address), kwargs={"message": helloMessage})
-	helloThread.start()
+		helloMessage = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
+		print ("hello: " + helloMessage)
+		helloThread = threading.Thread(target=sendHello, args=(sock, server_address), kwargs={"message": helloMessage, "username": peer.username})
+		helloThread.start()
 
-	# TODO add more functionality (recv?)
-	while True:
-		time.sleep(0.5)
-
-
-except ServiceException:
-
-	helloEvent.set()
-	helloThread.join()
-
-finally:
-	print ("closing socket")
-	sock.close()	
-
-# getGETLISTMessage(123)
-# getLISTMessage(123, "peers")
-# getMESSAGEMessage(123, 11, 11, "asd")
-# getUPDATEMessage(123, "db")
-# getDISCONNECTMessage(123)
-# getACKMessage(123)
-# getERRORMessage(123, "asasfad")
+		# TODO add more functionality (recv?)
+		while True:
+			time.sleep(0.5)
 
 
+	except ServiceException:
 
-#     # Receive response
-#     print ("waiting to receive")
-#     data, server = sock.recvfrom(4096)
-#     print ("received "%s"" % data.decode("utf-8"))
+		helloEvent.set()
+		helloThread.join()
+		print ("ServiceException")
 
+	finally:
+		print ("closing socket")
+		sock.close()	
+
+	# getGETLISTMessage(123)
+	# getLISTMessage(123, "peers")
+	# getMESSAGEMessage(123, 11, 11, "asd")
+	# getUPDATEMessage(123, "db")
+	# getDISCONNECTMessage(123)
+	# getACKMessage(123)
+	# getERRORMessage(123, "asasfad")
+
+
+
+	#     # Receive response
+	#     print ("waiting to receive")
+	#     data, server = sock.recvfrom(4096)
+	#     print ("received "%s"" % data.decode("utf-8"))
+
+if __name__ == "__main__":
+	main()

@@ -45,6 +45,27 @@ def checkPeerList(peerList):
 
 		helloCheckEvent.wait(1)
 
+def handleHello(node, message):
+	print ("DOSTAL SOM HELLO")
+				
+	duplicity = False
+	toDelete = 0
+	for k,v in node.peerList.items():
+		if v["username"] == message["username"]:
+			if message["ipv4"] == "0.0.0.0" and message["port"] == 0:
+				toDelete = k
+				duplicity = True
+			else:	
+				duplicity = True
+				v["time"] = datetime.now()
+				break	
+	if toDelete != 0:
+		del node.peerList[toDelete]
+
+	if not duplicity:
+		node.peerList[str(node.peerCount)] = vars(PeerRecord(message["username"], message["ipv4"], message["port"], datetime.now()))
+		node.peerCount += 1
+
 def main():
 	print ("NODE")
 
@@ -73,27 +94,7 @@ def main():
 			# print ("received %s bytes from %s" % (len(data.decode("utf-8")), address))
 			message = decodeMessage(data.decode("utf-8")).getVars()
 			if message["type"] == "hello":
-				print ("DOSTAL SOM HELLO")
-				
-				duplicity = False
-				toDelete = 0
-				for k,v in node.peerList.items():
-					if v["username"] == message["username"]:
-						if message["ipv4"] == "0.0.0.0" and message["port"] == 0:
-							# toDelete = k
-							duplicity = True
-						else:	
-							duplicity = True
-							v["time"] = datetime.now()
-							break	
-				if toDelete != 0:
-					del node.peerList[toDelete]
-
-
-				if not duplicity:
-					node.peerList[str(node.peerCount)] = vars(PeerRecord(message["username"], message["ipv4"], message["port"], datetime.now()))
-					node.peerCount += 1
-
+				handleHello(node, message)
 			else:
 				print ("DOSTAL som nieco ine")	
 

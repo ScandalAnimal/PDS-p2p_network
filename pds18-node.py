@@ -3,11 +3,13 @@
 import socket
 import sys
 import signal
+import threading
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs
 from util import ServiceException, signalHandler
 from protocol import decodeMessage
 
+helloCheckEvent = threading.Event()
 
 class PeerRecord:
 	def __init__(self, username, ipv4, port, time):
@@ -29,6 +31,20 @@ class Node:
 	def printPeerRecords(self):
 		print (str(self.peerList))			
 
+def checkPeerList(peerList):
+	while not helloCheckEvent.is_set():
+		toDelete = 0
+		for k,v in peerList.items():
+			now = datetime.now() - timedelta(seconds=30)
+			time = v["time"]
+			if now > time:
+				toDelete = k
+				break
+		if toDelete != 0:
+			del peerList[toDelete]
+
+		helloCheckEvent.wait(1)
+
 def main():
 	print ("NODE")
 
@@ -47,6 +63,9 @@ def main():
 
 	try:
 
+		helloCheckThread = threading.Thread(target=checkPeerList, kwargs={"peerList": node.peerList})
+		helloCheckThread.start()
+
 		while True:
 			# print ("\nwaiting to receive message")
 			data, address = sock.recvfrom(4096)
@@ -61,7 +80,7 @@ def main():
 				for k,v in node.peerList.items():
 					if v["username"] == message["username"]:
 						if message["ipv4"] == "0.0.0.0" and message["port"] == 0:
-							toDelete = k
+							# toDelete = k
 							duplicity = True
 						else:	
 							duplicity = True
@@ -78,12 +97,6 @@ def main():
 			else:
 				print ("DOSTAL som nieco ine")	
 
-			# for k,v in node.peerList.items():
-			# 	now = datetime.now() - timedelta(seconds=30)
-			# 	time = v["time"]
-			# 	if now > time:
-			# 		del node.peerList[k]
-
 			print ("**")
 			node.printPeerRecords()
 			print ("**")
@@ -94,6 +107,8 @@ def main():
 
 
 	except ServiceException:
+		helloCheckEvent.set()
+		helloCheckThread.join()
 		print ("ServiceException")
 	finally:
 		print ("closing socket")

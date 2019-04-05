@@ -7,6 +7,7 @@ import threading
 import time
 from parsers import parsePeerArgs
 from protocol import getHELLOMessage
+from util import ServiceException, signalHandler, getRandomId
 # , getGETLISTMessage, getLISTMessage, getMESSAGEMessage, getUPDATEMessage, getDISCONNECTMessage, getACKMessage, getERRORMessage
 
 helloEvent = threading.Event()
@@ -18,14 +19,10 @@ def sendHello(sock, server_address, message):
 		helloEvent.wait(10)
 
 	# TODO ... Clean shutdown code here ...
-	print ("CLEAN")
-
-class ServiceException(Exception):
-	pass
-
-def signalHandler(signum, frame):
-	print ('Caught signal %d' % signum) # TODO print to stderr
-	raise ServiceException
+	# nulove HELLO pri kille
+	message = getHELLOMessage(getRandomId(), peer.username, "0.0.0.0", 0)
+	print ("hello: " + message)
+	sent = sock.sendto(message.encode("utf-8"), server_address)
 
 class Peer:
 	def __init__(self, args):
@@ -55,7 +52,7 @@ signal.signal(signal.SIGINT, signalHandler)
 
 try:
 
-	helloMessage = getHELLOMessage(123, peer.username, peer.chatIp, peer.chatPort)
+	helloMessage = getHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
 	print ("hello: " + helloMessage)
 	helloThread = threading.Thread(target=sendHello, args=(sock, server_address), kwargs={"message": helloMessage})
 	helloThread.start()
@@ -69,11 +66,6 @@ except ServiceException:
 
 	helloEvent.set()
 	helloThread.join()
-
-	# nulove HELLO pri kille
-	message = getHELLOMessage(123, peer.username, "0.0.0.0", 0)
-	print ("hello: " + message)
-	sent = sock.sendto(message.encode("utf-8"), server_address)
 
 finally:
 	print ("closing socket")

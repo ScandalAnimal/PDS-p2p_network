@@ -2,7 +2,9 @@
 
 import socket
 import sys
+import signal
 from parsers import parseNodeArgs
+from util import ServiceException, signalHandler
 
 print ("NODE")
 
@@ -25,14 +27,25 @@ server_address = (node.regIp, node.regPort)
 print ("starting up on %s port %s" % server_address)
 sock.bind(server_address)
 
+signal.signal(signal.SIGINT, signalHandler)
 
-while True:
-    print ("\nwaiting to receive message")
-    data, address = sock.recvfrom(4096)
-    
-    print ("received %s bytes from %s" % (len(data.decode("utf-8")), address))
-    print (data.decode("utf-8"))
-    
-    if data:
-        sent = sock.sendto(data, address)
-        print ("sent %s bytes back to %s" % (sent, address))
+try:
+
+	while True:
+		print ("\nwaiting to receive message")
+		data, address = sock.recvfrom(4096)
+		
+		print ("received %s bytes from %s" % (len(data.decode("utf-8")), address))
+		print (data.decode("utf-8"))
+		
+		# TODO toto pouzit na ACK
+		# if data:
+			# sent = sock.sendto(data, address)
+			# print ("sent %s bytes back to %s" % (sent, address))
+
+
+# except ServiceException:
+
+finally:
+	print ("closing socket")
+	sock.close()	        

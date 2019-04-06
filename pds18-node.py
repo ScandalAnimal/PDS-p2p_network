@@ -4,6 +4,8 @@ import socket
 import sys
 import signal
 import threading
+import os
+import time
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs
 from util import ServiceException, signalHandler
@@ -11,6 +13,7 @@ from protocol import decodeMessage
 
 helloCheckEvent = threading.Event()
 printPeerListEvent = threading.Event()
+readRpcEvent = threading.Event()
 
 class PeerRecord:
 	def __init__(self, username, ipv4, port, time):
@@ -31,6 +34,14 @@ class Node:
 			", Peer count: " + str(self.peerCount) + ", Peer list: " + str(self.peerList))
 	def printPeerRecords(self):
 		print (str(self.peerList))			
+
+def readRpc(file):
+	with open(file, 'r') as f:
+		while not readRpcEvent.is_set():
+			i = f.readline()
+			if i != "" and i != '\n':
+				print ("x: " + i)
+			readRpcEvent.wait(1)	
 
 def checkPeerList(peerList):
 	while not helloCheckEvent.is_set():
@@ -91,12 +102,20 @@ def main():
 
 	signal.signal(signal.SIGINT, signalHandler)
 
+	rpcFileName = "node" + str(node.id)
+	f = open(rpcFileName, "w+")
+	rpcFilePath = os.path.abspath(rpcFileName)
+	f.close()
+
 	try:
 
 		helloCheckThread = threading.Thread(target=checkPeerList, kwargs={"peerList": node.peerList})
 		helloCheckThread.start()
 		printPeerListThread = threading.Thread(target=printPeerList, kwargs={"node": node})
 		printPeerListThread.start()
+
+		readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName})
+		readRpcThread.start()
 
 		while True:
 			# print ("\nwaiting to receive message")
@@ -121,9 +140,12 @@ def main():
 		helloCheckThread.join()
 		printPeerListEvent.set()
 		printPeerListThread.join()
+		readRpcEvent.set()
+		readRpcThread.join()
 		print ("ServiceException")
 	finally:
 		print ("closing socket")
+		os.remove(rpcFilePath)
 		sock.close()	        
 
 

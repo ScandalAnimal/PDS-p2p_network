@@ -5,12 +5,14 @@ import signal
 import sys
 import threading
 import time
+import os
 from parsers import parsePeerArgs
 from protocol import encodeHELLOMessage
 from util import ServiceException, signalHandler, getRandomId
 # , encodeGETLISTMessage, encodeLISTMessage, encodeMESSAGEMessage, encodeUPDATEMessage, encodeDISCONNECTMessage, encodeACKMessage, encodeERRORMessage
 
 helloEvent = threading.Event()
+readRpcEvent = threading.Event()
 
 def sendHello(sock, server_address, message, username):
 	while not helloEvent.is_set():
@@ -23,6 +25,14 @@ def sendHello(sock, server_address, message, username):
 	message = encodeHELLOMessage(getRandomId(), username, "0.0.0.0", 0)
 	print ("hello: " + message)
 	sent = sock.sendto(message.encode("utf-8"), server_address)
+
+def readRpc(file):
+	with open(file, 'r') as f:
+		while not readRpcEvent.is_set():
+			i = f.readline()
+			if i != "" and i != '\n':
+				print ("x: " + i)
+			readRpcEvent.wait(1)	
 
 class Peer:
 	def __init__(self, args):
@@ -52,12 +62,20 @@ def main():
 
 	signal.signal(signal.SIGINT, signalHandler)
 
+	rpcFileName = "peer" + str(peer.id)
+	f = open(rpcFileName, "w+")
+	rpcFilePath = os.path.abspath(rpcFileName)
+	f.close()
+
 	try:
 
 		helloMessage = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
 		print ("hello: " + helloMessage)
 		helloThread = threading.Thread(target=sendHello, args=(sock, server_address), kwargs={"message": helloMessage, "username": peer.username})
 		helloThread.start()
+
+		readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName})
+		readRpcThread.start()
 
 		# TODO add more functionality (recv?)
 		while True:
@@ -67,13 +85,15 @@ def main():
 
 
 	except ServiceException:
-
+		print ("ServiceException")
 		helloEvent.set()
 		helloThread.join()
-		print ("ServiceException")
+		readRpcEvent.set()
+		readRpcThread.join()
 
 	finally:
 		print ("closing socket")
+		os.remove(rpcFilePath)
 		sock.close()	
 
 	# getGETLISTMessage(123)

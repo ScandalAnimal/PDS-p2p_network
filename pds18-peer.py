@@ -47,6 +47,7 @@ def main():
 	print ("Peer:" + str(peer))
 
 	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	sock.bind((peer.chatIp, peer.chatPort))
 	server_address = (peer.regIp, peer.regPort)
 
 	signal.signal(signal.SIGINT, signalHandler)
@@ -60,6 +61,8 @@ def main():
 
 		# TODO add more functionality (recv?)
 		while True:
+			data, server = sock.recvfrom(4096)
+			print ("FINALLY")
 			time.sleep(0.5)
 
 

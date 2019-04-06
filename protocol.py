@@ -10,12 +10,6 @@ class Parent:
 		params = vars(self)
 		return {k.encode("utf-8"):v for k,v in params.items()}
 
-class PeerRecord(Parent):
-	def __init__(self, username, ipv4, port):
-		self.username = username
-		self.ipv4 = ipv4
-		self.port = port
-
 class Hello(Parent):
 	def __init__(self, txid, username, ipv4, port):
 		self.type = "hello"

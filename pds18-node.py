@@ -10,6 +10,7 @@ from util import ServiceException, signalHandler
 from protocol import decodeMessage
 
 helloCheckEvent = threading.Event()
+printPeerListEvent = threading.Event()
 
 class PeerRecord:
 	def __init__(self, username, ipv4, port, time):
@@ -27,7 +28,7 @@ class Node:
 		self.peerList = {}
 	def __str__(self):
 		return ("Id: " + str(self.id) + ", regIp: " + self.regIp + ", regPort: " + str(self.regPort) + 
-			"Peer count: " + str(self.peerCount) + ", Peer list: " + str(self.peerList))
+			", Peer count: " + str(self.peerCount) + ", Peer list: " + str(self.peerList))
 	def printPeerRecords(self):
 		print (str(self.peerList))			
 
@@ -44,6 +45,14 @@ def checkPeerList(peerList):
 			del peerList[toDelete]
 
 		helloCheckEvent.wait(1)
+
+def printPeerList(node):
+	while not printPeerListEvent.is_set():
+		print ("**")
+		node.printPeerRecords()
+		print ("**")
+
+		helloCheckEvent.wait(3)
 
 def handleHello(node, message):
 	print ("DOSTAL SOM HELLO")
@@ -86,11 +95,14 @@ def main():
 
 		helloCheckThread = threading.Thread(target=checkPeerList, kwargs={"peerList": node.peerList})
 		helloCheckThread.start()
+		printPeerListThread = threading.Thread(target=printPeerList, kwargs={"node": node})
+		printPeerListThread.start()
 
 		while True:
 			# print ("\nwaiting to receive message")
 			data, address = sock.recvfrom(4096)
 			
+			print ("ADDRESS: " + str(address))
 			# print ("received %s bytes from %s" % (len(data.decode("utf-8")), address))
 			message = decodeMessage(data.decode("utf-8")).getVars()
 			if message["type"] == "hello":
@@ -98,9 +110,6 @@ def main():
 			else:
 				print ("DOSTAL som nieco ine")	
 
-			print ("**")
-			node.printPeerRecords()
-			print ("**")
 			# TODO toto pouzit na ACK
 			# if data:
 				# sent = sock.sendto(data, address)
@@ -110,6 +119,8 @@ def main():
 	except ServiceException:
 		helloCheckEvent.set()
 		helloCheckThread.join()
+		printPeerListEvent.set()
+		printPeerListThread.join()
 		print ("ServiceException")
 	finally:
 		print ("closing socket")

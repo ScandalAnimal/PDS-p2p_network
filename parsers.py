@@ -19,3 +19,52 @@ def parseNodeArgs():
 	parser.add_argument("--reg-port", type=int, required=True, help="Port of reg node", metavar="reg-port")
 	return parser.parse_args()
 
+def msg(name=None):                                                            
+	return '''pds18-rpc.py
+	[-h] --id id
+	(--peer --command message --from <name1> --to <name2> --message <text> |
+	--peer --command getlist |
+	--peer --command peers |
+	--peer --command reconnect --reg-ipv4 <ip> --reg-port <int> |
+	--node --command database |
+	--node --command neighbors |
+	--node --command connect --reg-ipv4 <ip> --reg-port <int> |
+	--node --command disconnect |
+	--node --command sync)
+	'''
+
+def parseRpcArgs():
+	parser = argparse.ArgumentParser(usage=msg())
+	parser.add_argument("--id", type=int, required=True, help="Unique node/peer identificator", metavar="id")
+	pngroup = parser.add_mutually_exclusive_group(required=True)
+	pngroup.add_argument('--peer', help="Target is peer", action='store_true', dest='peer')
+	pngroup.add_argument('--node', help="Target is node", action='store_true', dest='node')
+	parser.add_argument("--command", required=True, help="Command", choices=['message','getlist','peers','reconnect','database','neighbors','connect','disconnect','sync'], metavar="command")
+	parser.add_argument("--from", help="Message from", type=str, dest="fromName")
+	parser.add_argument("--to", help="Message to", type=str, dest="toName")
+	parser.add_argument("--message", help="Message string", type=str, metavar="message")
+	parser.add_argument("--reg-ipv4", help="Registration ip address", type=str, metavar="reg-ipv4")
+	parser.add_argument("--reg-port", help="Registration port", type=str, metavar="reg-port")
+	args = parser.parse_args()
+
+	if args.peer and (args.command != 'message' and args.command != 'getlist' and args.command != 'peers' and args.command != 'reconnect'):
+		parser.error("Invalid parameters")
+
+	if args.node and (args.command != 'database' and args.command != 'neighbors' and args.command != 'connect' and args.command != 'disconnect' and args.command != 'sync'):
+		parser.error("Invalid parameters")
+
+	if args.command == 'message' and (args.fromName is None or args.toName is None or args.message is None):
+		parser.error("Invalid parameters")
+	
+	if (args.command == 'getlist' or args.command == 'peers' or args.command == 'database' or args.command == 'neighbors' or args.command == 'disconnect' or args.command == 'sync') and (args.fromName or args.toName or args.message or args.reg_ipv4 or args.reg_port):
+		parser.error("Invalid parameters")
+
+	if (args.command == 'reconnect' or args.command == 'connect') and (args.reg_ipv4 is None or args.reg_port is None):
+		parser.error("Invalid parameters")	
+
+	return parser.parse_args()
+
+
+
+
+

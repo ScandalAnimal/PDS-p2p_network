@@ -19,9 +19,6 @@ def sendHello(sock, server_address, message, username):
 		print ("sending %s" % message)
 		sent = sock.sendto(message.encode("utf-8"), server_address)
 		helloEvent.wait(10)
-
-	# TODO ... Clean shutdown code here ...
-	# nulove HELLO pri kille
 	message = encodeHELLOMessage(getRandomId(), username, "0.0.0.0", 0)
 	print ("hello: " + message)
 	sent = sock.sendto(message.encode("utf-8"), server_address)

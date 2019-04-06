@@ -1,61 +1,34 @@
 #!/usr/bin/python
 
+import os
 from parsers import parseRpcArgs
-# class Rpc:
-	# def __init__(self, args):
-	# def __str__(self):
-		# return ("Id: " + str(self.id) + ", username: " + self.username + 
-			# ", chatIp: " + self.chatIp + ", chatPort: " + str(self.chatPort) + 
-			# ", regIp: " + self.regIp + ", regPort: " + str(self.regPort))	
-
 
 def main():
 	print ("RPC")
 
 	args = parseRpcArgs()
 	print (args)
-	# peer = Peer(args)
-	# print ("Peer:" + str(peer))
 
-	# sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	# sock.bind((peer.chatIp, peer.chatPort))
-	# server_address = (peer.regIp, peer.regPort)
+	fileName = ""
+	if args.peer and args.id:
+		fileName = "peer" + str(args.id)
+	if args.node and args.id:
+		fileName = "node" + str(args.id)	
 
-	# signal.signal(signal.SIGINT, signalHandler)
-
-	# rpcFileName = "peer" + str(peer.id)
-	# f = open(rpcFileName, "w+")
-	# rpcFilePath = os.path.abspath(rpcFileName)
-	# f.close()
-
-	# try:
-
-	# 	helloMessage = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
-	# 	print ("hello: " + helloMessage)
-	# 	helloThread = threading.Thread(target=sendHello, args=(sock, server_address), kwargs={"message": helloMessage, "username": peer.username})
-	# 	helloThread.start()
-
-	# 	readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName})
-	# 	readRpcThread.start()
-
-	# 	# TODO add more functionality (recv?)
-	# 	while True:
-	# 		data, server = sock.recvfrom(4096)
-	# 		print ("FINALLY")
-	# 		time.sleep(0.5)
-
-
-	# except ServiceException:
-	# 	print ("ServiceException")
-	# 	helloEvent.set()
-	# 	helloThread.join()
-	# 	readRpcEvent.set()
-	# 	readRpcThread.join()
-
-	# finally:
-	# 	print ("closing socket")
-	# 	os.remove(rpcFilePath)
-	# 	sock.close()	
+	try:
+		if os.path.isfile(fileName):
+			with open(fileName, "a") as f:
+				command = args.command
+				if args.command == "message":
+					command = command + " " + args.fromName + " " + args.toName + " " + args.message
+				if args.command == "reconnect" or args.command == "connect":
+					command = command + " " + args.reg_ipv4 + " " + args.reg_port	
+				command = command + "\n"	
+				f.write(command)
+		else:
+			raise IOError		
+	except IOError as e:
+		print ('Target peer/node is not running')	
 
 if __name__ == "__main__":
 	main()

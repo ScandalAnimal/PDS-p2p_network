@@ -28,14 +28,16 @@ def sendGetList(peer):
 	while not getlistEvent.is_set():
 		message = encodeGETLISTMessage(getRandomId())
 		sent = peer.sock.sendto(message.encode("utf-8"), peer.nodeAddress)
-		getlistEvent.wait(2)
-		try:
-			reply = peer.sock.recv(4096)
-			print ("received getlist: " + str(decodeMessage(reply.decode("utf-8")).getVars()))
-			getlistEvent.set()
-		except socket.timeout:
-			print ("error: didnt get list on getlist call")
-			getlistEvent.set()	
+		while True:
+			try:
+				reply = peer.sock.recv(4096)
+				print ("received getlist: " + str(decodeMessage(reply.decode("utf-8")).getVars()))
+				getlistEvent.set()
+				break
+			except socket.timeout:
+				print ("error: didnt get list on getlist call")
+				getlistEvent.set()	
+				break
 
 def handleCommand(command, peer):
 	if isCommand("getlist", command):
@@ -102,7 +104,7 @@ def main():
 		f.close()
 
 		initSocket(peer)
-		
+
 		signal.signal(signal.SIGINT, signalHandler)
 	
 		helloMessage = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)

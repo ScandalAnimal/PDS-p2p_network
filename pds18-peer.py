@@ -43,6 +43,11 @@ def sendGetList(peer):
 				peer.sock.settimeout(None)
 				break
 
+def sendAck(peer, txid):
+	ack = encodeACKMessage(txid)
+	print ("ACK: " + str(ack))
+	sent = peer.sock.sendto(ack.encode("utf-8"), peer.nodeAddress)
+
 def sendPeers(peer):
 	while not peersEvent.is_set():
 		peer.sock.settimeout(2)
@@ -61,9 +66,7 @@ def sendPeers(peer):
 						print ("REPLY: " + str(decodedReply))
 						if decodedReply["type"] == 'list':
 							print ("GOT LIST: " + str(decodedReply))
-							ack = encodeACKMessage(decodedReply["txid"])
-							print ("ACK: " + str(ack))
-							sent = peer.sock.sendto(ack.encode("utf-8"), peer.nodeAddress)
+							sendAck(peer, decodedReply["txid"])
 							peersEvent.set()
 							break
 						else:

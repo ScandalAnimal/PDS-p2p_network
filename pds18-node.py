@@ -120,14 +120,17 @@ def handleHello(node, message):
 		node.peerList[str(node.peerCount)] = vars(PeerRecord(message["username"], message["ipv4"], message["port"], datetime.now()))
 		node.peerCount += 1
 
+def sendAck(node, txid, address):
+	ack = encodeACKMessage(txid)
+	print ("ACK: " + str(ack))
+	sent = node.sock.sendto(ack.encode("utf-8"), address)
+
 def handleGetList(node, message, address):
 	print ("DOSTAL SOM GETLIST: " + str(message))
 
 	while not getListEvent.is_set():
 		node.sock.settimeout(2)
-		ack = encodeACKMessage(message["txid"])
-		print ("ACK: " + str(ack))
-		sent = node.sock.sendto(ack.encode("utf-8"), address)
+		sendAck(node, message["txid"], address)
 
 		try:
 			listMessage = encodeLISTMessage(message["txid"], node.getPeerRecordsForListMessage())
@@ -136,17 +139,6 @@ def handleGetList(node, message, address):
 			sent = node.sock.sendto(listMessage.encode("utf-8"), address)
 			node.sock.settimeout(2)
 			node.acks[message["txid"]] = datetime.now()
-			# node.sock.settimeout(2)
-			# while True:
-				# reply = node.sock.recv(4096)
-				# decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
-				# if decodedReply["type"] == 'ack':
-					# print ("LIST correctly acked")
-					# getListEvent.set()
-					# break
-				# else:
-					# continue	
-				# break	
 			getListEvent.set()		
 		except socket.timeout:
 			print ("error: didnt get ack on list call")

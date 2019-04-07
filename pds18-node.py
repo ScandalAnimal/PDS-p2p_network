@@ -99,7 +99,8 @@ def handleAck(node, message, time):
 		if allowed < node.acks[message["txid"]]:
 			print ("ACK ok")
 		else:
-			print ("ACK not ok - prisiel po limite - ERROR")	
+			print ("ACK not ok - prisiel po limite - ERROR")
+		del node.acks[message["txid"]]	
 
 	else:
 		print ("KLUC neexistuje - to je asi ok, je nam to jedno")

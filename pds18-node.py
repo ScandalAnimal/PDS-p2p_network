@@ -208,6 +208,8 @@ def main():
 					getListEvent.set()
 					getListThread.join()
 					raise ServiceException
+				finally:
+					getListEvent.clear()	
 			elif message["type"] == "ack":
 				node.sock.settimeout(None)
 				handleAck(node, message, datetime.now())

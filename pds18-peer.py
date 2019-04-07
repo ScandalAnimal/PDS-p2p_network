@@ -49,7 +49,9 @@ def sendAck(peer, txid):
 	sent = peer.sock.sendto(ack.encode("utf-8"), peer.nodeAddress)
 
 def sendPeers(peer):
+	print ("1")
 	while not peersEvent.is_set():
+		print ("2")
 		peer.sock.settimeout(2)
 		message = encodeGETLISTMessage(getRandomId())
 		sent = peer.sock.sendto(message.encode("utf-8"), peer.nodeAddress)
@@ -78,11 +80,12 @@ def sendPeers(peer):
 
 			except socket.timeout:
 				print ("error: didnt get ack on getlist call")
-				peersEvent.set()	
+				peersEvent.set()
 				peer.sock.settimeout(None)
 				break
 
 def handleCommand(command, peer):
+	print ("NOVY COMMAND: " + str(command))
 	if isCommand("getlist", command):
 		try:
 			getListThread = threading.Thread(target=sendGetList, kwargs={"peer": peer})
@@ -92,6 +95,8 @@ def handleCommand(command, peer):
 			getListEvent.set()
 			getListThread.join()
 			raise ServiceException
+		finally:
+			getListEvent.clear()
 	elif isCommand("peers", command):
 		try:
 			peersThread = threading.Thread(target=sendPeers, kwargs={"peer": peer})
@@ -100,7 +105,9 @@ def handleCommand(command, peer):
 			print ("ServiceException in handleCommand")
 			peersEvent.set()
 			peersThread.join()
-			raise ServiceException		
+			raise ServiceException
+		finally:
+			peersEvent.clear()
 
 def readRpc(file, peer):
 	with open(file, 'r') as f:

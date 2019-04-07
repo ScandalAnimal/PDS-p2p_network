@@ -68,6 +68,8 @@ def isCommand(commandName, commandString):
 
 	if commandName == "getlist":
 		return commandString == "getlist"
+	elif commandName == "peers":
+		return commandString == "peers"	
 
 	return False		
 

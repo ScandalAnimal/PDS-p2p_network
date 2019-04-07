@@ -35,8 +35,6 @@ def customEncode(params):
 def customDecode(params):
 	items = {}
 	for k,v in params.items():
-		print ("V: " + str(v))
-		print ("K: " + str(k))
 		if isinstance(v, dict):
 			if isinstance (k, bytes):
 				items[k.decode("utf-8")] = customDecode(v)

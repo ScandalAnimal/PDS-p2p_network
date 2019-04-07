@@ -40,6 +40,7 @@ class Node:
 		self.peerList = {}
 		self.sock = None
 		self.address = None
+		self.acks = {}
 	def __str__(self):
 		return ("Id: " + str(self.id) + ", regIp: " + self.regIp + ", regPort: " + str(self.regPort) + 
 			", Peer count: " + str(self.peerCount) + ", Peer list: " + str(self.peerList))
@@ -48,8 +49,8 @@ class Node:
 	def getPeerRecordsForListMessage(self):
 		items = {}
 		for k,v in self.peerList.items():
-			print ("V: " + str(v))
-			del v['time']
+			if "time" in v:
+				del v['time']
 			items[k] = v
 		return items
 
@@ -84,6 +85,20 @@ def printPeerList(node):
 
 		helloCheckEvent.wait(10)
 
+def handleAck(node, message, time):
+	print ("DOSTAL SOM ACK")
+
+	if message["txid"] in node.acks:
+		print ("KLUC existuje")
+		allowed = time - timedelta(seconds=2)
+		if allowed < node.acks[message["txid"]]:
+			print ("ACK ok")
+		else:
+			print ("ACK not ok - prisiel po limite - ERROR")	
+
+	else:
+		print ("KLUC neexistuje - to je asi ok, je nam to jedno")
+
 def handleHello(node, message):
 	print ("DOSTAL SOM HELLO")
 				
@@ -109,17 +124,36 @@ def handleGetList(node, message, address):
 	print ("DOSTAL SOM GETLIST: " + str(message))
 
 	while not getListEvent.is_set():
-
+		node.sock.settimeout(2)
 		ack = encodeACKMessage(message["txid"])
 		print ("ACK: " + str(ack))
 		sent = node.sock.sendto(ack.encode("utf-8"), address)
-		# TODO pouzit na list
-		# listMessage = encodeLISTMessage(message["txid"], node.getPeerRecordsForListMessage())
 
-		# print ("message: " + str(listMessage))
-		# sent = node.sock.sendto(listMessage.encode("utf-8"), address)
-		getListEvent.set()	
+		try:
+			listMessage = encodeLISTMessage(message["txid"], node.getPeerRecordsForListMessage())
 
+			print ("LIST: " + str(listMessage))
+			sent = node.sock.sendto(listMessage.encode("utf-8"), address)
+			node.sock.settimeout(2)
+			node.acks[message["txid"]] = datetime.now()
+			# node.sock.settimeout(2)
+			# while True:
+				# reply = node.sock.recv(4096)
+				# decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
+				# if decodedReply["type"] == 'ack':
+					# print ("LIST correctly acked")
+					# getListEvent.set()
+					# break
+				# else:
+					# continue	
+				# break	
+			getListEvent.set()		
+		except socket.timeout:
+			print ("error: didnt get ack on list call")
+			getListEvent.set()
+			node.sock.settimeout(None)
+			break		
+				
 def initSocket(node):
 	node.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	node.address = (node.regIp, node.regPort)
@@ -172,6 +206,9 @@ def main():
 					getListEvent.set()
 					getListThread.join()
 					raise ServiceException
+			elif message["type"] == "ack":
+				node.sock.settimeout(None)
+				handleAck(node, message, datetime.now())
 			else:
 				print ("DOSTAL som nieco ine")	
 

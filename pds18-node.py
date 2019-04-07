@@ -9,12 +9,12 @@ import time
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs
 from util import ServiceException, UniqueIdException, signalHandler
-from protocol import decodeMessage, encodeLISTMessage
+from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage
 
 helloCheckEvent = threading.Event()
 printPeerListEvent = threading.Event()
 readRpcEvent = threading.Event()
-listEvent = threading.Event()
+getListEvent = threading.Event()
 
 class PeerRecordForListMessage:
 	def __init__(self, username, ipv4, port):
@@ -108,19 +108,17 @@ def handleHello(node, message):
 def handleGetList(node, message, address):
 	print ("DOSTAL SOM GETLIST: " + str(message))
 
-	while not listEvent.is_set():
-		listMessage = encodeLISTMessage(message["txid"], node.getPeerRecordsForListMessage())
+	while not getListEvent.is_set():
 
-		print ("message: " + str(listMessage))
-		sent = node.sock.sendto(listMessage.encode("utf-8"), address)
-		# getlistEvent.wait(2)
-		# try:
-			# reply = peer.sock.recv(4096)
-			# print ("received getlist: " + reply)	
-		# except socket.timeout:
-			# print ("error: didnt get list on getlist call")
-			# getlistEvent.set()	
-		listEvent.set()	
+		ack = encodeACKMessage(message["txid"])
+		print ("ACK: " + str(ack))
+		sent = node.sock.sendto(ack.encode("utf-8"), address)
+		# TODO pouzit na list
+		# listMessage = encodeLISTMessage(message["txid"], node.getPeerRecordsForListMessage())
+
+		# print ("message: " + str(listMessage))
+		# sent = node.sock.sendto(listMessage.encode("utf-8"), address)
+		getListEvent.set()	
 
 def initSocket(node):
 	node.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -159,30 +157,23 @@ def main():
 		readRpcThread.start()
 
 		while True:
-			# print ("\nwaiting to receive message")
 			data, address = node.sock.recvfrom(4096)
 			
 			print ("ADDRESS: " + str(address))
-			# print ("received %s bytes from %s" % (len(data.decode("utf-8")), address))
 			message = decodeMessage(data.decode("utf-8")).getVars()
 			if message["type"] == "hello":
 				handleHello(node, message)
 			elif message["type"] == "getlist":
 				try:
-					listThread = threading.Thread(target=handleGetList, kwargs={"node": node, "message": message, "address": address})
-					listThread.start()
+					getListThread = threading.Thread(target=handleGetList, kwargs={"node": node, "message": message, "address": address})
+					getListThread.start()
 				except ServiceException:
 					print ("ServiceException 2")
-					listEvent.set()
-					listThread.join()
+					getListEvent.set()
+					getListThread.join()
 					raise ServiceException
 			else:
 				print ("DOSTAL som nieco ine")	
-
-			# TODO toto pouzit na ACK
-			# if data:
-				# sent = sock.sendto(data, address)
-				# print ("sent %s bytes back to %s" % (sent, address))
 
 	except UniqueIdException:
 		print ("UniqueIdException")

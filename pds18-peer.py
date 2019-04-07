@@ -31,11 +31,13 @@ def sendGetList(peer):
 		while True:
 			try:
 				reply = peer.sock.recv(4096)
-				print ("received getlist: " + str(decodeMessage(reply.decode("utf-8")).getVars()))
-				getlistEvent.set()
-				break
+				decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
+				if decodedReply["type"] == 'ack':
+					print ("GETLIST correctly acked")
+					getlistEvent.set()
+					break
 			except socket.timeout:
-				print ("error: didnt get list on getlist call")
+				print ("error: didnt get ack on getlist call")
 				getlistEvent.set()	
 				break
 

@@ -77,6 +77,11 @@ class Peer:
 			", chatIp: " + self.chatIp + ", chatPort: " + str(self.chatPort) + 
 			", regIp: " + self.regIp + ", regPort: " + str(self.regPort))
 
+def initSocket(peer):
+	peer.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	peer.sock.settimeout(2)
+	peer.sock.bind((peer.chatIp, peer.chatPort))
+	peer.nodeAddress = (peer.regIp, peer.regPort)
 
 def main():
 	print ("PEER")
@@ -96,11 +101,8 @@ def main():
 		rpcFilePath = os.path.abspath(rpcFileName)
 		f.close()
 
-		peer.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-		peer.sock.settimeout(2)
-		peer.sock.bind((peer.chatIp, peer.chatPort))
-		peer.nodeAddress = (peer.regIp, peer.regPort)
-
+		initSocket(peer)
+		
 		signal.signal(signal.SIGINT, signalHandler)
 	
 		helloMessage = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
@@ -111,11 +113,10 @@ def main():
 		readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName, "peer": peer})
 		readRpcThread.start()
 
-		# TODO add more functionality (recv?)
 		while True:
-			# data, server = sock.recvfrom(4096)
 			print (str(peer.test))
 			time.sleep(2)
+
 	except UniqueIdException:
 		print ("UniqueIdException")
 
@@ -132,21 +133,6 @@ def main():
 			os.remove(rpcFilePath)
 		if peer.sock:
 			peer.sock.close()	
-
-	# getGETLISTMessage(123)
-	# getLISTMessage(123, "peers")
-	# getMESSAGEMessage(123, 11, 11, "asd")
-	# getUPDATEMessage(123, "db")
-	# getDISCONNECTMessage(123)
-	# getACKMessage(123)
-	# getERRORMessage(123, "asasfad")
-
-
-
-	#     # Receive response
-	#     print ("waiting to receive")
-	#     data, server = sock.recvfrom(4096)
-	#     print ("received "%s"" % data.decode("utf-8"))
 
 if __name__ == "__main__":
 	main()

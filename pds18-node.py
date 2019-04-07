@@ -122,6 +122,12 @@ def handleGetList(node, message, address):
 			# getlistEvent.set()	
 		listEvent.set()	
 
+def initSocket(node):
+	node.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	node.address = (node.regIp, node.regPort)
+	print ("starting up on %s port %s" % node.address)
+	node.sock.bind(node.address)
+
 def main():
 	print ("NODE")
 
@@ -140,11 +146,7 @@ def main():
 		rpcFilePath = os.path.abspath(rpcFileName)
 		f.close()
 
-		node.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-		node.address = (node.regIp, node.regPort)
-		print ("starting up on %s port %s" % node.address)
-		node.sock.bind(node.address)
+		initSocket(node)
 
 		signal.signal(signal.SIGINT, signalHandler)
 	

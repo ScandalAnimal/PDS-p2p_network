@@ -8,7 +8,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs
-from util import ServiceException, signalHandler
+from util import ServiceException, UniqueIdException, signalHandler
 from protocol import decodeMessage
 
 helloCheckEvent = threading.Event()
@@ -94,21 +94,25 @@ def main():
 	node = Node(args)
 	print ("Node:" + str(node))
 
-	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-	server_address = (node.regIp, node.regPort)
-	print ("starting up on %s port %s" % server_address)
-	sock.bind(server_address)
-
-	signal.signal(signal.SIGINT, signalHandler)
-
-	rpcFileName = "node" + str(node.id)
-	f = open(rpcFileName, "w+")
-	rpcFilePath = os.path.abspath(rpcFileName)
-	f.close()
-
+	sock = None
+	rpcFilePath = ""
 	try:
 
+		rpcFileName = "node" + str(node.id)
+		if os.path.isfile(rpcFileName):
+			raise UniqueIdException
+		f = open(rpcFileName, "w+")
+		rpcFilePath = os.path.abspath(rpcFileName)
+		f.close()
+
+		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+		server_address = (node.regIp, node.regPort)
+		print ("starting up on %s port %s" % server_address)
+		sock.bind(server_address)
+
+		signal.signal(signal.SIGINT, signalHandler)
+	
 		helloCheckThread = threading.Thread(target=checkPeerList, kwargs={"peerList": node.peerList})
 		helloCheckThread.start()
 		printPeerListThread = threading.Thread(target=printPeerList, kwargs={"node": node})
@@ -134,7 +138,9 @@ def main():
 				# sent = sock.sendto(data, address)
 				# print ("sent %s bytes back to %s" % (sent, address))
 
-
+	except UniqueIdException:
+		print ("UniqueIdException")
+	
 	except ServiceException:
 		helloCheckEvent.set()
 		helloCheckThread.join()
@@ -145,8 +151,10 @@ def main():
 		print ("ServiceException")
 	finally:
 		print ("closing socket")
-		os.remove(rpcFilePath)
-		sock.close()	        
+		if os.path.isfile(rpcFilePath):
+			os.remove(rpcFilePath)
+		if sock:
+			sock.close()	        
 
 
 if __name__ == "__main__":

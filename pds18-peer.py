@@ -8,7 +8,7 @@ import time
 import os
 from parsers import parsePeerArgs
 from protocol import encodeHELLOMessage
-from util import ServiceException, signalHandler, getRandomId
+from util import ServiceException, UniqueIdException, signalHandler, getRandomId
 # , encodeGETLISTMessage, encodeLISTMessage, encodeMESSAGEMessage, encodeUPDATEMessage, encodeDISCONNECTMessage, encodeACKMessage, encodeERRORMessage
 
 helloEvent = threading.Event()
@@ -53,19 +53,23 @@ def main():
 	peer = Peer(args)
 	print ("Peer:" + str(peer))
 
-	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-	sock.bind((peer.chatIp, peer.chatPort))
-	server_address = (peer.regIp, peer.regPort)
-
-	signal.signal(signal.SIGINT, signalHandler)
-
-	rpcFileName = "peer" + str(peer.id)
-	f = open(rpcFileName, "w+")
-	rpcFilePath = os.path.abspath(rpcFileName)
-	f.close()
-
+	sock = None
+	rpcFilePath = ""
 	try:
 
+		rpcFileName = "peer" + str(peer.id)
+		if os.path.isfile(rpcFileName):
+			raise UniqueIdException
+		f = open(rpcFileName, "w+")
+		rpcFilePath = os.path.abspath(rpcFileName)
+		f.close()
+
+		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		sock.bind((peer.chatIp, peer.chatPort))
+		server_address = (peer.regIp, peer.regPort)
+
+		signal.signal(signal.SIGINT, signalHandler)
+	
 		helloMessage = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
 		print ("hello: " + helloMessage)
 		helloThread = threading.Thread(target=sendHello, args=(sock, server_address), kwargs={"message": helloMessage, "username": peer.username})
@@ -79,7 +83,8 @@ def main():
 			data, server = sock.recvfrom(4096)
 			print ("FINALLY")
 			time.sleep(0.5)
-
+	except UniqueIdException:
+		print ("UniqueIdException")
 
 	except ServiceException:
 		print ("ServiceException")
@@ -90,8 +95,10 @@ def main():
 
 	finally:
 		print ("closing socket")
-		os.remove(rpcFilePath)
-		sock.close()	
+		if os.path.isfile(rpcFilePath):
+			os.remove(rpcFilePath)
+		if sock:
+			sock.close()	
 
 	# getGETLISTMessage(123)
 	# getLISTMessage(123, "peers")

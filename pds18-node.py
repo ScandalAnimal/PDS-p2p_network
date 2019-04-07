@@ -9,11 +9,18 @@ import time
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs
 from util import ServiceException, UniqueIdException, signalHandler
-from protocol import decodeMessage
+from protocol import decodeMessage, encodeLISTMessage
 
 helloCheckEvent = threading.Event()
 printPeerListEvent = threading.Event()
 readRpcEvent = threading.Event()
+listEvent = threading.Event()
+
+class PeerRecordForListMessage:
+	def __init__(self, username, ipv4, port):
+		self.username = username
+		self.ipv4 = ipv4
+		self.port = port
 
 class PeerRecord:
 	def __init__(self, username, ipv4, port, time):
@@ -21,6 +28,8 @@ class PeerRecord:
 		self.ipv4 = ipv4
 		self.port = port
 		self.time = time
+	def getRecordForListMessage(self):
+		return PeerRecordForListMessage(self.username, self.ipv4, self.port)
 
 class Node:
 	def __init__(self, args):
@@ -29,11 +38,20 @@ class Node:
 		self.regPort = args.reg_port
 		self.peerCount = 0
 		self.peerList = {}
+		self.sock = None
+		self.address = None
 	def __str__(self):
 		return ("Id: " + str(self.id) + ", regIp: " + self.regIp + ", regPort: " + str(self.regPort) + 
 			", Peer count: " + str(self.peerCount) + ", Peer list: " + str(self.peerList))
 	def printPeerRecords(self):
-		print (str(self.peerList))			
+		print (str(self.peerList))
+	def getPeerRecordsForListMessage(self):
+		items = {}
+		for k,v in self.peerList.items():
+			print ("V: " + str(v))
+			del v['time']
+			items[k] = v
+		return items
 
 def readRpc(file):
 	with open(file, 'r') as f:
@@ -48,7 +66,8 @@ def checkPeerList(peerList):
 		toDelete = 0
 		for k,v in peerList.items():
 			now = datetime.now() - timedelta(seconds=30)
-			time = v["time"]
+			if "time" in v:
+				time = v["time"]
 			if now > time:
 				toDelete = k
 				break
@@ -63,7 +82,7 @@ def printPeerList(node):
 		node.printPeerRecords()
 		print ("**")
 
-		helloCheckEvent.wait(3)
+		helloCheckEvent.wait(10)
 
 def handleHello(node, message):
 	print ("DOSTAL SOM HELLO")
@@ -86,6 +105,23 @@ def handleHello(node, message):
 		node.peerList[str(node.peerCount)] = vars(PeerRecord(message["username"], message["ipv4"], message["port"], datetime.now()))
 		node.peerCount += 1
 
+def handleGetList(node, message, address):
+	print ("DOSTAL SOM GETLIST: " + str(message))
+
+	while not listEvent.is_set():
+		listMessage = encodeLISTMessage(message["txid"], node.getPeerRecordsForListMessage())
+
+		print ("message: " + str(listMessage))
+		sent = node.sock.sendto(listMessage.encode("utf-8"), address)
+		# getlistEvent.wait(2)
+		# try:
+			# reply = peer.sock.recv(4096)
+			# print ("received getlist: " + reply)	
+		# except socket.timeout:
+			# print ("error: didnt get list on getlist call")
+			# getlistEvent.set()	
+		listEvent.set()	
+
 def main():
 	print ("NODE")
 
@@ -94,7 +130,6 @@ def main():
 	node = Node(args)
 	print ("Node:" + str(node))
 
-	sock = None
 	rpcFilePath = ""
 	try:
 
@@ -105,11 +140,11 @@ def main():
 		rpcFilePath = os.path.abspath(rpcFileName)
 		f.close()
 
-		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		node.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-		server_address = (node.regIp, node.regPort)
-		print ("starting up on %s port %s" % server_address)
-		sock.bind(server_address)
+		node.address = (node.regIp, node.regPort)
+		print ("starting up on %s port %s" % node.address)
+		node.sock.bind(node.address)
 
 		signal.signal(signal.SIGINT, signalHandler)
 	
@@ -123,13 +158,22 @@ def main():
 
 		while True:
 			# print ("\nwaiting to receive message")
-			data, address = sock.recvfrom(4096)
+			data, address = node.sock.recvfrom(4096)
 			
 			print ("ADDRESS: " + str(address))
 			# print ("received %s bytes from %s" % (len(data.decode("utf-8")), address))
 			message = decodeMessage(data.decode("utf-8")).getVars()
 			if message["type"] == "hello":
 				handleHello(node, message)
+			elif message["type"] == "getlist":
+				try:
+					listThread = threading.Thread(target=handleGetList, kwargs={"node": node, "message": message, "address": address})
+					listThread.start()
+				except ServiceException:
+					print ("ServiceException 2")
+					listEvent.set()
+					listThread.join()
+					raise ServiceException
 			else:
 				print ("DOSTAL som nieco ine")	
 
@@ -153,8 +197,8 @@ def main():
 		print ("closing socket")
 		if os.path.isfile(rpcFilePath):
 			os.remove(rpcFilePath)
-		if sock:
-			sock.close()	        
+		if node.sock:
+			node.sock.close()	        
 
 
 if __name__ == "__main__":

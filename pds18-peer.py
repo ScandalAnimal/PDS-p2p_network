@@ -6,29 +6,59 @@ import sys
 import threading
 import time
 import os
-from parsers import parsePeerArgs
-from protocol import encodeHELLOMessage
+from parsers import parsePeerArgs, isCommand
+from protocol import encodeHELLOMessage, encodeGETLISTMessage, decodeMessage
 from util import ServiceException, UniqueIdException, signalHandler, getRandomId
 # , encodeGETLISTMessage, encodeLISTMessage, encodeMESSAGEMessage, encodeUPDATEMessage, encodeDISCONNECTMessage, encodeACKMessage, encodeERRORMessage
 
 helloEvent = threading.Event()
 readRpcEvent = threading.Event()
+getlistEvent = threading.Event()
 
-def sendHello(sock, server_address, message, username):
+def sendHello(sock, nodeAddress, message, username):
 	while not helloEvent.is_set():
 		print ("sending %s" % message)
-		sent = sock.sendto(message.encode("utf-8"), server_address)
+		sent = sock.sendto(message.encode("utf-8"), nodeAddress)
 		helloEvent.wait(10)
 	message = encodeHELLOMessage(getRandomId(), username, "0.0.0.0", 0)
 	print ("hello: " + message)
-	sent = sock.sendto(message.encode("utf-8"), server_address)
+	sent = sock.sendto(message.encode("utf-8"), nodeAddress)
 
-def readRpc(file):
+def sendGetList(peer):
+	while not getlistEvent.is_set():
+		message = encodeGETLISTMessage(getRandomId())
+		sent = peer.sock.sendto(message.encode("utf-8"), peer.nodeAddress)
+		getlistEvent.wait(2)
+		try:
+			reply = peer.sock.recv(4096)
+			print ("received getlist: " + str(decodeMessage(reply.decode("utf-8")).getVars()))
+			getlistEvent.set()
+		except socket.timeout:
+			print ("error: didnt get list on getlist call")
+			getlistEvent.set()	
+
+def handleCommand(command, peer):
+	if isCommand("getlist", command):
+		try:
+			print ("got getlist")
+			peer.test = "new"
+
+			getlistThread = threading.Thread(target=sendGetList, kwargs={"peer": peer})
+			getlistThread.start()
+		except ServiceException:
+			print ("ServiceException in handleCommand")
+			getlistEvent.set()
+			getlistThread.join()
+			raise ServiceException
+
+def readRpc(file, peer):
 	with open(file, 'r') as f:
 		while not readRpcEvent.is_set():
-			i = f.readline()
-			if i != "" and i != '\n':
-				print ("x: " + i)
+			command = f.readline()
+			command = command.replace("\n", "")
+			if command != "" and command != '\n':
+				print ("x: " + command)
+				handleCommand(command, peer)
 			readRpcEvent.wait(1)	
 
 class Peer:
@@ -39,10 +69,13 @@ class Peer:
 		self.chatPort = args.chat_port
 		self.regIp = args.reg_ipv4
 		self.regPort = args.reg_port
+		self.sock = None
+		self.nodeAddress = None
+		self.test = "none"
 	def __str__(self):
 		return ("Id: " + str(self.id) + ", username: " + self.username + 
 			", chatIp: " + self.chatIp + ", chatPort: " + str(self.chatPort) + 
-			", regIp: " + self.regIp + ", regPort: " + str(self.regPort))	
+			", regIp: " + self.regIp + ", regPort: " + str(self.regPort))
 
 
 def main():
@@ -53,7 +86,6 @@ def main():
 	peer = Peer(args)
 	print ("Peer:" + str(peer))
 
-	sock = None
 	rpcFilePath = ""
 	try:
 
@@ -64,25 +96,26 @@ def main():
 		rpcFilePath = os.path.abspath(rpcFileName)
 		f.close()
 
-		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-		sock.bind((peer.chatIp, peer.chatPort))
-		server_address = (peer.regIp, peer.regPort)
+		peer.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		peer.sock.settimeout(2)
+		peer.sock.bind((peer.chatIp, peer.chatPort))
+		peer.nodeAddress = (peer.regIp, peer.regPort)
 
 		signal.signal(signal.SIGINT, signalHandler)
 	
 		helloMessage = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
 		print ("hello: " + helloMessage)
-		helloThread = threading.Thread(target=sendHello, args=(sock, server_address), kwargs={"message": helloMessage, "username": peer.username})
+		helloThread = threading.Thread(target=sendHello, args=(peer.sock, peer.nodeAddress), kwargs={"message": helloMessage, "username": peer.username})
 		helloThread.start()
 
-		readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName})
+		readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName, "peer": peer})
 		readRpcThread.start()
 
 		# TODO add more functionality (recv?)
 		while True:
-			data, server = sock.recvfrom(4096)
-			print ("FINALLY")
-			time.sleep(0.5)
+			# data, server = sock.recvfrom(4096)
+			print (str(peer.test))
+			time.sleep(2)
 	except UniqueIdException:
 		print ("UniqueIdException")
 
@@ -97,8 +130,8 @@ def main():
 		print ("closing socket")
 		if os.path.isfile(rpcFilePath):
 			os.remove(rpcFilePath)
-		if sock:
-			sock.close()	
+		if peer.sock:
+			peer.sock.close()	
 
 	# getGETLISTMessage(123)
 	# getLISTMessage(123, "peers")

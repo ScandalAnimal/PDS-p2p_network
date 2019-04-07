@@ -64,6 +64,13 @@ def parseRpcArgs():
 
 	return parser.parse_args()
 
+def isCommand(commandName, commandString):
+
+	if commandName == "getlist":
+		return commandString == "getlist"
+
+	return False		
+
 
 
 

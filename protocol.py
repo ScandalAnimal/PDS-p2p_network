@@ -23,11 +23,49 @@ class GetList(Parent):
 		self.type = "getlist"
 		self.txid = txid
 
+def customEncode(params):
+	items = {}
+	for k,v in params.items():
+		if isinstance(v, dict):
+			items[k.encode("utf-8")] = customEncode(v)
+		else:
+			items[k.encode("utf-8")] = v
+	return items			
+
+def customDecode(params):
+	items = {}
+	for k,v in params.items():
+		print ("V: " + str(v))
+		print ("K: " + str(k))
+		if isinstance(v, dict):
+			if isinstance (k, bytes):
+				items[k.decode("utf-8")] = customDecode(v)
+			else:
+				items[k] = customDecode(v)
+		else:
+			if isinstance (k, bytes):
+				if isinstance (v, bytes):
+					items[k.decode("utf-8")] = v.decode("utf-8")
+				else:
+					items[k.decode("utf-8")] = v
+			else:
+				if isinstance (v, bytes):
+					items[k] = v.decode("utf-8")
+				else:
+					items[k] = v
+	return items
+
 class List(Parent):
 	def __init__(self, txid, peers):
 		self.type = "list"
 		self.txid = txid
 		self.peers = peers
+	def toJson(self):
+		params = vars(self)
+		return customEncode(params)
+	def getVars(self):
+		params = vars(self)
+		return customDecode(params)	
 
 class Message(Parent):
 	def __init__(self, txid, fromIp, to, message):

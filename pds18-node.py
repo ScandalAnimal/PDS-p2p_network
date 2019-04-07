@@ -53,6 +53,11 @@ class Node:
 				del v['time']
 			items[k] = v
 		return items
+	def isPeer(self, address):
+		for k,v in self.peerList.items():
+			if v["ipv4"] == address[0] and v["port"] == address[1]:
+				return True
+		return False		
 
 def readRpc(file):
 	with open(file, 'r') as f:
@@ -130,7 +135,12 @@ def handleGetList(node, message, address):
 
 	while not getListEvent.is_set():
 		node.sock.settimeout(2)
-		sendAck(node, message["txid"], address)
+		if not node.isPeer(address):
+			print ("dostal som GETLIST od cudzieho peera")
+			getListEvent.set()
+			node.sock.settimeout(None)
+			break
+		sendAck(node, message["txid"], address)	
 
 		try:
 			listMessage = encodeLISTMessage(message["txid"], node.getPeerRecordsForListMessage())

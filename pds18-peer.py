@@ -78,7 +78,7 @@ def sendPeers(peer):
 
 			except socket.timeout:
 				print ("error: didnt get ack on getlist call")
-				getListEvent.set()	
+				peersEvent.set()	
 				peer.sock.settimeout(None)
 				break
 

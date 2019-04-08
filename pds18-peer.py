@@ -17,14 +17,14 @@ getListEvent = threading.Event()
 peersEvent = threading.Event()
 messageEvent = threading.Event()
 
-def sendHello(sock, nodeAddress, message, username):
+def sendHello(peer, message):
 	while not helloEvent.is_set():
-		print ("sending %s" % message)
-		sent = sock.sendto(message.encode("utf-8"), nodeAddress)
+		print ("sending to address: " + str((peer.regIp, peer.regPort)) + " -> " + str(message))
+		sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 		helloEvent.wait(10)
-	message = encodeHELLOMessage(getRandomId(), username, "0.0.0.0", 0)
+	message = encodeHELLOMessage(getRandomId(), peer.username, "0.0.0.0", 0)
 	print ("hello: " + message)
-	sent = sock.sendto(message.encode("utf-8"), nodeAddress)
+	sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 
 def handleAck(peer, message, time):
 	print ("DOSTAL SOM ACK")
@@ -50,20 +50,6 @@ def sendGetList(peer):
 		peer.acks[txid] = datetime.now()
 		peer.currentPhase = 1
 		getListEvent.set()
-		# while True:
-		# 	try:
-		# 		reply, address = peer.sock.recvfrom(4096)
-		# 		decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
-		# 		if decodedReply["type"] == 'ack':
-		# 			handleAck(peer, decodedReply, datetime.now())
-		# 			print ("GETLIST correctly acked")
-		# 			getListEvent.set()
-		# 			break
-		# 	except socket.timeout:
-		# 		print ("error: didnt get ack on getlist call")
-		# 		getListEvent.set()	
-		# 		peer.sock.settimeout(None)
-		# 		break
 
 def sendAck(peer, txid, address):
 	ack = encodeACKMessage(txid)
@@ -73,7 +59,6 @@ def sendAck(peer, txid, address):
 def sendPeers(peer):
 
 	while not peersEvent.is_set():
-		print ("A")
 		try:
 			getListThread = threading.Thread(target=sendGetList, kwargs={"peer": peer})
 			getListThread.start()
@@ -84,25 +69,9 @@ def sendPeers(peer):
 			raise ServiceException
 		finally:
 			getListEvent.clear()
-			print ("B")
 			peersEvent.set()
 
-		print ("C")
 		peer.currentPhase = 2
-
-	# 				while True:
-	# 					reply, address = peer.sock.recvfrom(4096)
-	# 					decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
-	# 					print ("REPLY: " + str(decodedReply))
-	# 					if decodedReply["type"] == 'list':
-	# 						print ("GOT LIST: " + str(decodedReply))
-	# 						sendAck(peer, decodedReply["txid"], address)
-	# 						peersEvent.set()
-	# 						break
-	# 					else:
-	# 						continue
-	# 				print ("sended ack")			
-	# 				break		
 
 def findUserInPeerList(peers, user):
 	for k,v in peers.items():
@@ -141,6 +110,19 @@ def handleMessage(peer, peerList):
 	finally:
 		messageEvent.clear()
 	
+def handleReconnect(peer, args):
+	newIp = args[1]
+	newPort = args[2]
+
+	nodeAddress = (peer.regIp, peer.regPort)
+	message = encodeHELLOMessage(getRandomId(), peer.username, "0.0.0.0", 0)
+	sent = peer.sock.sendto(message.encode("utf-8"), nodeAddress)
+	peer.regIp = newIp
+	peer.regPort = int(newPort)
+	nodeAddress = (peer.regIp, peer.regPort)
+	message = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
+	sent = peer.sock.sendto(message.encode("utf-8"), nodeAddress)
+
 def handleCommand(command, peer):
 	print ("NOVY COMMAND: " + str(command))
 	if isCommand("getlist", command):
@@ -184,6 +166,10 @@ def handleCommand(command, peer):
 				raise ServiceException
 			finally:
 				messageEvent.clear()
+	elif isCommand("reconnect", command):
+		args = command.split()
+		handleReconnect(peer, args)
+		print ("DID reconnect")
 
 def readRpc(file, peer):
 	with open(file, 'r') as f:
@@ -191,7 +177,7 @@ def readRpc(file, peer):
 			command = f.readline()
 			command = command.replace("\n", "")
 			if command != "" and command != '\n':
-				print ("x: " + command)
+				print ("command: " + command)
 				handleCommand(command, peer)
 			readRpcEvent.wait(1)	
 
@@ -244,7 +230,7 @@ def main():
 	
 		helloMessage = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
 		print ("hello: " + helloMessage)
-		helloThread = threading.Thread(target=sendHello, args=(peer.sock, peer.nodeAddress), kwargs={"message": helloMessage, "username": peer.username})
+		helloThread = threading.Thread(target=sendHello, kwargs={"peer": peer, "message": helloMessage})
 		helloThread.start()
 
 		readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName, "peer": peer})

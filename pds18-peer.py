@@ -8,13 +8,14 @@ import time
 import os
 from datetime import datetime, timedelta
 from parsers import parsePeerArgs, isCommand
-from protocol import encodeHELLOMessage, encodeGETLISTMessage, encodeACKMessage, decodeMessage
+from protocol import encodeHELLOMessage, encodeGETLISTMessage, encodeACKMessage, encodeMESSAGEMessage, decodeMessage
 from util import ServiceException, UniqueIdException, signalHandler, getRandomId
 
 helloEvent = threading.Event()
 readRpcEvent = threading.Event()
 getListEvent = threading.Event()
 peersEvent = threading.Event()
+messageEvent = threading.Event()
 
 def sendHello(sock, nodeAddress, message, username):
 	while not helloEvent.is_set():
@@ -47,20 +48,22 @@ def sendGetList(peer):
 		message = encodeGETLISTMessage(txid)
 		sent = peer.sock.sendto(message.encode("utf-8"), peer.nodeAddress)
 		peer.acks[txid] = datetime.now()
-		while True:
-			try:
-				reply, address = peer.sock.recvfrom(4096)
-				decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
-				if decodedReply["type"] == 'ack':
-					handleAck(peer, decodedReply, datetime.now())
-					print ("GETLIST correctly acked")
-					getListEvent.set()
-					break
-			except socket.timeout:
-				print ("error: didnt get ack on getlist call")
-				getListEvent.set()	
-				peer.sock.settimeout(None)
-				break
+		peer.currentPhase = 1
+		getListEvent.set()
+		# while True:
+		# 	try:
+		# 		reply, address = peer.sock.recvfrom(4096)
+		# 		decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
+		# 		if decodedReply["type"] == 'ack':
+		# 			handleAck(peer, decodedReply, datetime.now())
+		# 			print ("GETLIST correctly acked")
+		# 			getListEvent.set()
+		# 			break
+		# 	except socket.timeout:
+		# 		print ("error: didnt get ack on getlist call")
+		# 		getListEvent.set()	
+		# 		peer.sock.settimeout(None)
+		# 		break
 
 def sendAck(peer, txid, address):
 	ack = encodeACKMessage(txid)
@@ -68,47 +71,80 @@ def sendAck(peer, txid, address):
 	sent = peer.sock.sendto(ack.encode("utf-8"), address)
 
 def sendPeers(peer):
-	print ("1")
+
 	while not peersEvent.is_set():
-		print ("2")
-		peer.sock.settimeout(2)
-		txid = getRandomId()
-		message = encodeGETLISTMessage(txid)
-		sent = peer.sock.sendto(message.encode("utf-8"), peer.nodeAddress)
-		peer.acks[txid] = datetime.now()
-		while True:
-			try:
-				reply, address = peer.sock.recvfrom(4096)
-				decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
-				if decodedReply["type"] == 'ack':
-					handleAck(peer, decodedReply, datetime.now())
-					print ("GETLIST correctly acked")
-					peer.sock.settimeout(None)
-					while True:
-						reply, address = peer.sock.recvfrom(4096)
-						decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
-						print ("REPLY: " + str(decodedReply))
-						if decodedReply["type"] == 'list':
-							print ("GOT LIST: " + str(decodedReply))
-							sendAck(peer, decodedReply["txid"], address)
-							peersEvent.set()
-							break
-						else:
-							continue
-					print ("sended ack")			
-					break		
-				else:
-					continue
+		print ("A")
+		try:
+			getListThread = threading.Thread(target=sendGetList, kwargs={"peer": peer})
+			getListThread.start()
+		except ServiceException:
+			print ("ServiceException in handleCommand")
+			getListEvent.set()
+			getListThread.join()
+			raise ServiceException
+		finally:
+			getListEvent.clear()
+			print ("B")
+			peersEvent.set()
 
-			except socket.timeout:
-				print ("error: didnt get ack on getlist call")
-				peersEvent.set()
-				peer.sock.settimeout(None)
-				break
+		print ("C")
+		peer.currentPhase = 2
 
+	# 				while True:
+	# 					reply, address = peer.sock.recvfrom(4096)
+	# 					decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
+	# 					print ("REPLY: " + str(decodedReply))
+	# 					if decodedReply["type"] == 'list':
+	# 						print ("GOT LIST: " + str(decodedReply))
+	# 						sendAck(peer, decodedReply["txid"], address)
+	# 						peersEvent.set()
+	# 						break
+	# 					else:
+	# 						continue
+	# 				print ("sended ack")			
+	# 				break		
+
+def findUserInPeerList(peers, user):
+	for k,v in peers.items():
+		if v["username"] == user:
+			return (v["ipv4"], v["port"])
+	return None		
+
+def sendMessage(peer, peerList):
+	while not messageEvent.is_set():
+		to = peer.currentCommandParams[2]
+		contents = peer.currentCommandParams[3]
+		recipientAddress = findUserInPeerList(peerList, to)
+		if recipientAddress:
+			peer.sock.settimeout(2)
+			txid = getRandomId()
+			message = encodeMESSAGEMessage(txid, peer.username, to, contents)
+			print ("MESSAGE: " + str(message))
+
+			sent = peer.sock.sendto(message.encode("utf-8"), recipientAddress)
+			peer.acks[txid] = datetime.now()
+			peer.currentPhase = 3
+		else:
+			print ("address NOT FOUND in list")	
+		messageEvent.set()
+
+def handleMessage(peer, peerList):
+
+	try:
+		messageThread = threading.Thread(target=sendMessage, kwargs={"peer": peer, "peerList": peerList})
+		messageThread.start()
+	except ServiceException:
+		print ("ServiceException in handleCommand")
+		messageEvent.set()
+		messageThread.join()
+		raise ServiceException
+	finally:
+		messageEvent.clear()
+	
 def handleCommand(command, peer):
 	print ("NOVY COMMAND: " + str(command))
 	if isCommand("getlist", command):
+		peer.currentCommand = "getlist"
 		try:
 			getListThread = threading.Thread(target=sendGetList, kwargs={"peer": peer})
 			getListThread.start()
@@ -120,6 +156,7 @@ def handleCommand(command, peer):
 		finally:
 			getListEvent.clear()
 	elif isCommand("peers", command):
+		peer.currentCommand = "peers"
 		try:
 			peersThread = threading.Thread(target=sendPeers, kwargs={"peer": peer})
 			peersThread.start()
@@ -130,6 +167,23 @@ def handleCommand(command, peer):
 			raise ServiceException
 		finally:
 			peersEvent.clear()
+	elif isCommand("message", command):
+		peer.currentCommand = "message"
+		args = command.split()
+		peer.currentCommandParams = args
+		if peer.username != args[1]:
+			print ("ERROR - pokusas sa poslat spravu z ineho peera ako sam od seba")
+		else:
+			try:
+				messageThread = threading.Thread(target=sendPeers, kwargs={"peer": peer})
+				messageThread.start()
+			except ServiceException:
+				print ("ServiceException in handleCommand")
+				messageEvent.set()
+				messageThread.join()
+				raise ServiceException
+			finally:
+				messageEvent.clear()
 
 def readRpc(file, peer):
 	with open(file, 'r') as f:
@@ -152,6 +206,9 @@ class Peer:
 		self.sock = None
 		self.nodeAddress = None
 		self.acks = {}
+		self.currentCommand = None
+		self.currentCommandParams = []
+		self.currentPhase = None
 	def __str__(self):
 		return ("Id: " + str(self.id) + ", username: " + self.username + 
 			", chatIp: " + self.chatIp + ", chatPort: " + str(self.chatPort) + 
@@ -194,7 +251,35 @@ def main():
 		readRpcThread.start()
 
 		while True:
-			time.sleep(2)
+			try:
+				data, address = peer.sock.recvfrom(4096)
+				
+				message = decodeMessage(data.decode("utf-8")).getVars()
+				if message["type"] == 'ack':
+					if peer.currentCommand == "getlist" and peer.currentPhase == 1:
+						peer.sock.settimeout(None)
+						handleAck(peer, message, datetime.now())
+					elif peer.currentCommand == "message" and peer.currentPhase == 3:
+						peer.sock.settimeout(None)
+						handleAck(peer, message, datetime.now())	
+				elif message["type"] == 'list':
+					if peer.currentCommand == "peers" and peer.currentPhase == 2:
+						print ("GOT LIST: " + str(message['peers']))
+						sendAck(peer, message["txid"], address)
+					elif peer.currentCommand == "message" and peer.currentPhase == 2:
+						handleMessage(peer, message['peers'])
+				elif message["type"] == 'message':
+					if message["to"] == peer.username:
+						print ("GOT MESSAGE: " + str(message))
+						sendAck(peer, message["txid"], address)
+					else:
+						print ("dostal som spravu pre niekoho ineho")	
+				else:
+					print ("DOSTAL som nieco ine")	
+			except socket.timeout:	
+				print ("TIMEOUT")
+				peer.sock.settimeout(None)
+
 
 	except UniqueIdException:
 		print ("UniqueIdException")

@@ -31,7 +31,7 @@ def sendGetList(peer):
 		sent = peer.sock.sendto(message.encode("utf-8"), peer.nodeAddress)
 		while True:
 			try:
-				reply = peer.sock.recv(4096)
+				reply, address = peer.sock.recvfrom(4096)
 				decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
 				if decodedReply["type"] == 'ack':
 					print ("GETLIST correctly acked")
@@ -43,10 +43,10 @@ def sendGetList(peer):
 				peer.sock.settimeout(None)
 				break
 
-def sendAck(peer, txid):
+def sendAck(peer, txid, address):
 	ack = encodeACKMessage(txid)
 	print ("ACK: " + str(ack))
-	sent = peer.sock.sendto(ack.encode("utf-8"), peer.nodeAddress)
+	sent = peer.sock.sendto(ack.encode("utf-8"), address)
 
 def sendPeers(peer):
 	print ("1")
@@ -57,18 +57,18 @@ def sendPeers(peer):
 		sent = peer.sock.sendto(message.encode("utf-8"), peer.nodeAddress)
 		while True:
 			try:
-				reply = peer.sock.recv(4096)
+				reply, address = peer.sock.recvfrom(4096)
 				decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
 				if decodedReply["type"] == 'ack':
 					print ("GETLIST correctly acked")
 					peer.sock.settimeout(None)
 					while True:
-						reply = peer.sock.recv(4096)
+						reply, address = peer.sock.recvfrom(4096)
 						decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
 						print ("REPLY: " + str(decodedReply))
 						if decodedReply["type"] == 'list':
 							print ("GOT LIST: " + str(decodedReply))
-							sendAck(peer, decodedReply["txid"])
+							sendAck(peer, decodedReply["txid"], address)
 							peersEvent.set()
 							break
 						else:

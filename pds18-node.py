@@ -194,29 +194,32 @@ def main():
 		readRpcThread.start()
 
 		while True:
-			data, address = node.sock.recvfrom(4096)
-			
-			print ("ADDRESS: " + str(address))
-			message = decodeMessage(data.decode("utf-8")).getVars()
-			if message["type"] == "hello":
-				handleHello(node, message)
-			elif message["type"] == "getlist":
-				try:
-					getListThread = threading.Thread(target=handleGetList, kwargs={"node": node, "message": message, "address": address})
-					getListThread.start()
-				except ServiceException:
-					print ("ServiceException 2")
-					getListEvent.set()
-					getListThread.join()
-					raise ServiceException
-				finally:
-					getListEvent.clear()	
-			elif message["type"] == "ack":
+			try:
+				data, address = node.sock.recvfrom(4096)
+				
+				print ("ADDRESS: " + str(address))
+				message = decodeMessage(data.decode("utf-8")).getVars()
+				if message["type"] == "hello":
+					handleHello(node, message)
+				elif message["type"] == "getlist":
+					try:
+						getListThread = threading.Thread(target=handleGetList, kwargs={"node": node, "message": message, "address": address})
+						getListThread.start()
+					except ServiceException:
+						print ("ServiceException 2")
+						getListEvent.set()
+						getListThread.join()
+						raise ServiceException
+					finally:
+						getListEvent.clear()	
+				elif message["type"] == "ack":
+					node.sock.settimeout(None)
+					handleAck(node, message, datetime.now())
+				else:
+					print ("DOSTAL som nieco ine")	
+			except socket.timeout:	
+				print ("error: didnt get ack call")
 				node.sock.settimeout(None)
-				handleAck(node, message, datetime.now())
-			else:
-				print ("DOSTAL som nieco ine")	
-
 	except UniqueIdException:
 		print ("UniqueIdException")
 	

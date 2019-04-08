@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 import os
+from datetime import datetime, timedelta
 from parsers import parsePeerArgs, isCommand
 from protocol import encodeHELLOMessage, encodeGETLISTMessage, encodeACKMessage, decodeMessage
 from util import ServiceException, UniqueIdException, signalHandler, getRandomId
@@ -24,16 +25,34 @@ def sendHello(sock, nodeAddress, message, username):
 	print ("hello: " + message)
 	sent = sock.sendto(message.encode("utf-8"), nodeAddress)
 
+def handleAck(peer, message, time):
+	print ("DOSTAL SOM ACK")
+
+	if message["txid"] in peer.acks:
+		print ("KLUC existuje")
+		allowed = time - timedelta(seconds=2)
+		if allowed < peer.acks[message["txid"]]:
+			print ("ACK ok")
+		else:
+			print ("ACK not ok - prisiel po limite - ERROR")
+		del peer.acks[message["txid"]]	
+
+	else:
+		print ("KLUC neexistuje - to je asi ok, je nam to jedno")
+
 def sendGetList(peer):
 	while not getListEvent.is_set():
 		peer.sock.settimeout(2)
-		message = encodeGETLISTMessage(getRandomId())
+		txid = getRandomId()
+		message = encodeGETLISTMessage(txid)
 		sent = peer.sock.sendto(message.encode("utf-8"), peer.nodeAddress)
+		peer.acks[txid] = datetime.now()
 		while True:
 			try:
 				reply, address = peer.sock.recvfrom(4096)
 				decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
 				if decodedReply["type"] == 'ack':
+					handleAck(peer, decodedReply, datetime.now())
 					print ("GETLIST correctly acked")
 					getListEvent.set()
 					break
@@ -53,13 +72,16 @@ def sendPeers(peer):
 	while not peersEvent.is_set():
 		print ("2")
 		peer.sock.settimeout(2)
-		message = encodeGETLISTMessage(getRandomId())
+		txid = getRandomId()
+		message = encodeGETLISTMessage(txid)
 		sent = peer.sock.sendto(message.encode("utf-8"), peer.nodeAddress)
+		peer.acks[txid] = datetime.now()
 		while True:
 			try:
 				reply, address = peer.sock.recvfrom(4096)
 				decodedReply = decodeMessage(reply.decode("utf-8")).getVars()
 				if decodedReply["type"] == 'ack':
+					handleAck(peer, decodedReply, datetime.now())
 					print ("GETLIST correctly acked")
 					peer.sock.settimeout(None)
 					while True:
@@ -129,6 +151,7 @@ class Peer:
 		self.regPort = args.reg_port
 		self.sock = None
 		self.nodeAddress = None
+		self.acks = {}
 	def __str__(self):
 		return ("Id: " + str(self.id) + ", username: " + self.username + 
 			", chatIp: " + self.chatIp + ", chatPort: " + str(self.chatPort) + 

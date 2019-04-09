@@ -3,7 +3,7 @@
 import argparse
 
 def parsePeerArgs():
-	parser = argparse.ArgumentParser()
+	parser = argparse.ArgumentParser(allow_abbrev=False)
 	parser.add_argument("--id", type=int, required=True, help="Unique peer identificator", metavar="id")
 	parser.add_argument("--username", type=str, required=True, help="Peer username", metavar="username")
 	parser.add_argument("--chat-ipv4", type=str, required=True, help="Address where peer is listening", metavar="chat-ipv4")
@@ -13,7 +13,7 @@ def parsePeerArgs():
 	return parser.parse_args()
 
 def parseNodeArgs():
-	parser = argparse.ArgumentParser()
+	parser = argparse.ArgumentParser(allow_abbrev=False)
 	parser.add_argument("--id", type=int, required=True, help="Unique node identificator", metavar="id")
 	parser.add_argument("--reg-ipv4", type=str, required=True, help="Address of reg node", metavar="reg-ipv4")
 	parser.add_argument("--reg-port", type=int, required=True, help="Port of reg node", metavar="reg-port")
@@ -34,7 +34,7 @@ def msg(name=None):
 	'''
 
 def parseRpcArgs():
-	parser = argparse.ArgumentParser(usage=msg())
+	parser = argparse.ArgumentParser(usage=msg(),allow_abbrev=False)
 	parser.add_argument("--id", type=int, required=True, help="Unique node/peer identificator", metavar="id")
 	pngroup = parser.add_mutually_exclusive_group(required=True)
 	pngroup.add_argument('--peer', help="Target is peer", action='store_true', dest='peer')

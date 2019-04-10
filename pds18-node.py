@@ -38,6 +38,7 @@ class Node:
 		self.regPort = args.reg_port
 		self.peerCount = 0
 		self.peerList = {}
+		self.neighborsPeerList = {}
 		self.sock = None
 		self.address = None
 		self.acks = {}
@@ -45,7 +46,10 @@ class Node:
 		return ("Id: " + str(self.id) + ", regIp: " + self.regIp + ", regPort: " + str(self.regPort) + 
 			", Peer count: " + str(self.peerCount) + ", Peer list: " + str(self.peerList))
 	def printPeerRecords(self):
+		print ("My Peers: ")
 		print (str(self.peerList))
+		print ("Neighbors Peers: ")
+		print (str(self.neighborsPeerList))
 	def getPeerRecordsForListMessage(self):
 		items = {}
 		for k,v in self.peerList.items():

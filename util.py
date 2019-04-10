@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import uuid
+import random
 
 class ServiceException(Exception):
 	pass
@@ -12,9 +13,9 @@ def signalHandler(signum, frame):
 	print ('Caught signal %d' % signum) # TODO print to stderr
 	raise ServiceException
 
-# TODO replace with ushort?
 def getRandomId():
-	return str(uuid.uuid4()).replace("-","") 	
+	return random.randint(1,60000)
+	# return str(uuid.uuid4()).replace("-","") 	
 
 
 def decodeBytes(obj):

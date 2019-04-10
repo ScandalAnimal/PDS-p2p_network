@@ -23,23 +23,23 @@ def sendHello(peer, message):
 		sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 		helloEvent.wait(10)
 	message = encodeHELLOMessage(getRandomId(), peer.username, "0.0.0.0", 0)
-	print ("hello: " + message)
+	printErr ("hello: " + message)
 	sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 
 def handleAck(peer, message, time):
-	print ("DOSTAL SOM ACK")
+	printErr ("DOSTAL SOM ACK")
 
 	if message["txid"] in peer.acks:
-		print ("KLUC existuje")
+		printErr ("KLUC existuje")
 		allowed = time - timedelta(seconds=2)
 		if allowed < peer.acks[message["txid"]]:
-			print ("ACK ok")
+			printErr ("ACK ok")
 		else:
-			print ("ACK not ok - prisiel po limite - ERROR")
+			printErr ("ACK not ok - prisiel po limite - ERROR")
 		del peer.acks[message["txid"]]	
 
 	else:
-		print ("KLUC neexistuje - to je asi ok, je nam to jedno")
+		printErr ("KLUC neexistuje - to je asi ok, je nam to jedno")
 
 def sendGetList(peer):
 	while not getListEvent.is_set():
@@ -53,7 +53,7 @@ def sendGetList(peer):
 
 def sendAck(peer, txid, address):
 	ack = encodeACKMessage(txid)
-	print ("ACK: " + str(ack))
+	printErr ("ACK: " + str(ack))
 	sent = peer.sock.sendto(ack.encode("utf-8"), address)
 
 def sendPeers(peer):
@@ -63,7 +63,7 @@ def sendPeers(peer):
 			getListThread = threading.Thread(target=sendGetList, kwargs={"peer": peer})
 			getListThread.start()
 		except ServiceException:
-			print ("ServiceException in handleCommand")
+			printErr ("ServiceException in handleCommand")
 			getListEvent.set()
 			getListThread.join()
 			raise ServiceException
@@ -88,13 +88,13 @@ def sendMessage(peer, peerList):
 			peer.sock.settimeout(2)
 			txid = getRandomId()
 			message = encodeMESSAGEMessage(txid, peer.username, to, contents)
-			print ("MESSAGE: " + str(message))
+			print ("sending message: " + str(message))
 
 			sent = peer.sock.sendto(message.encode("utf-8"), recipientAddress)
 			peer.acks[txid] = datetime.now()
 			peer.currentPhase = 3
 		else:
-			print ("address NOT FOUND in list")	
+			printErr ("address NOT FOUND in list")	
 		messageEvent.set()
 
 def handleMessage(peer, peerList):
@@ -103,7 +103,7 @@ def handleMessage(peer, peerList):
 		messageThread = threading.Thread(target=sendMessage, kwargs={"peer": peer, "peerList": peerList})
 		messageThread.start()
 	except ServiceException:
-		print ("ServiceException in handleCommand")
+		printErr ("ServiceException in handleCommand")
 		messageEvent.set()
 		messageThread.join()
 		raise ServiceException
@@ -124,14 +124,14 @@ def handleReconnect(peer, args):
 	sent = peer.sock.sendto(message.encode("utf-8"), nodeAddress)
 
 def handleCommand(command, peer):
-	print ("NOVY COMMAND: " + str(command))
+	printErr ("NOVY COMMAND: " + str(command))
 	if isCommand("getlist", command):
 		peer.currentCommand = "getlist"
 		try:
 			getListThread = threading.Thread(target=sendGetList, kwargs={"peer": peer})
 			getListThread.start()
 		except ServiceException:
-			print ("ServiceException in handleCommand")
+			printErr ("ServiceException in handleCommand")
 			getListEvent.set()
 			getListThread.join()
 			raise ServiceException
@@ -143,7 +143,7 @@ def handleCommand(command, peer):
 			peersThread = threading.Thread(target=sendPeers, kwargs={"peer": peer})
 			peersThread.start()
 		except ServiceException:
-			print ("ServiceException in handleCommand")
+			printErr ("ServiceException in handleCommand")
 			peersEvent.set()
 			peersThread.join()
 			raise ServiceException
@@ -154,13 +154,13 @@ def handleCommand(command, peer):
 		args = command.split()
 		peer.currentCommandParams = args
 		if peer.username != args[1]:
-			print ("ERROR - pokusas sa poslat spravu z ineho peera ako sam od seba")
+			printErr ("ERROR - pokusas sa poslat spravu z ineho peera ako sam od seba")
 		else:
 			try:
 				messageThread = threading.Thread(target=sendPeers, kwargs={"peer": peer})
 				messageThread.start()
 			except ServiceException:
-				print ("ServiceException in handleCommand")
+				printErr ("ServiceException in handleCommand")
 				messageEvent.set()
 				messageThread.join()
 				raise ServiceException
@@ -169,7 +169,7 @@ def handleCommand(command, peer):
 	elif isCommand("reconnect", command):
 		args = command.split()
 		handleReconnect(peer, args)
-		print ("DID reconnect")
+		printErr ("DID reconnect")
 
 def resetPeerState(peer):
 	peer.currentCommand = None
@@ -182,7 +182,7 @@ def readRpc(file, peer):
 			command = f.readline()
 			command = command.replace("\n", "")
 			if command != "" and command != '\n':
-				print ("command: " + command)
+				printErr ("command: " + command)
 				resetPeerState(peer)
 				handleCommand(command, peer)
 			readRpcEvent.wait(1)	
@@ -213,12 +213,12 @@ def initSocket(peer):
 	peer.nodeAddress = (peer.regIp, peer.regPort)
 
 def main():
-	print ("PEER")
+	printErr ("PEER")
 
 	args = parsePeerArgs()
 
 	peer = Peer(args)
-	print ("Peer:" + str(peer))
+	printErr ("Peer:" + str(peer))
 
 	rpcFilePath = ""
 	try:
@@ -235,7 +235,7 @@ def main():
 		signal.signal(signal.SIGINT, signalHandler)
 	
 		helloMessage = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
-		print ("hello: " + helloMessage)
+		printErr ("hello: " + helloMessage)
 		helloThread = threading.Thread(target=sendHello, kwargs={"peer": peer, "message": helloMessage})
 		helloThread.start()
 
@@ -256,7 +256,7 @@ def main():
 						handleAck(peer, message, datetime.now())	
 				elif message["type"] == 'list':
 					if peer.currentCommand == "peers" and peer.currentPhase == 2:
-						print ("GOT LIST: " + str(message['peers']))
+						printErr ("GOT LIST: " + str(message['peers']))
 						sendAck(peer, message["txid"], address)
 					elif peer.currentCommand == "message" and peer.currentPhase == 2:
 						handleMessage(peer, message['peers'])
@@ -265,26 +265,26 @@ def main():
 						print ("GOT MESSAGE: " + str(message))
 						sendAck(peer, message["txid"], address)
 					else:
-						print ("dostal som spravu pre niekoho ineho")	
+						printErr ("dostal som spravu pre niekoho ineho")	
 				else:
-					print ("DOSTAL som nieco ine")	
+					printErr ("DOSTAL som nieco ine")	
 			except socket.timeout:	
-				print ("TIMEOUT")
+				printErr ("TIMEOUT")
 				peer.sock.settimeout(None)
 
 
 	except UniqueIdException:
-		print ("UniqueIdException")
+		printErr ("UniqueIdException")
 
 	except ServiceException:
-		print ("ServiceException")
+		printErr ("ServiceException")
 		helloEvent.set()
 		helloThread.join()
 		readRpcEvent.set()
 		readRpcThread.join()
 
 	finally:
-		print ("closing socket")
+		printErr ("closing socket")
 		if os.path.isfile(rpcFilePath):
 			os.remove(rpcFilePath)
 		if peer.sock:

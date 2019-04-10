@@ -7,7 +7,7 @@ import threading
 import os
 import time
 from datetime import datetime, timedelta
-from parsers import parseNodeArgs
+from parsers import parseNodeArgs, isCommand
 from util import ServiceException, UniqueIdException, signalHandler
 from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage
 
@@ -59,13 +59,21 @@ class Node:
 				return True
 		return False		
 
-def readRpc(file):
+def handleCommand(command, node):
+	print ("NOVY COMMAND: " + str(command))
+	if isCommand("database", command):
+		print ("DATABASE: ")
+		node.printPeerRecords()
+
+def readRpc(file, node):
 	with open(file, 'r') as f:
 		while not readRpcEvent.is_set():
-			i = f.readline()
-			if i != "" and i != '\n':
-				print ("x: " + i)
-			readRpcEvent.wait(1)	
+			command = f.readline()
+			command = command.replace("\n", "")
+			if command != "" and command != '\n':
+				print ("command: " + command)
+				handleCommand(command, node)
+			readRpcEvent.wait(1)		
 
 def checkPeerList(peerList):
 	while not helloCheckEvent.is_set():
@@ -190,7 +198,7 @@ def main():
 		printPeerListThread = threading.Thread(target=printPeerList, kwargs={"node": node})
 		printPeerListThread.start()
 
-		readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName})
+		readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName, "node": node})
 		readRpcThread.start()
 
 		while True:

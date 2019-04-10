@@ -75,7 +75,9 @@ def isCommand(commandName, commandString):
 		return len(args) == 4 and args[0] == "message"
 	elif commandName == "reconnect":
 		args = commandString.split()
-		return len(args) == 3 and args[0] == "reconnect"	
+		return len(args) == 3 and args[0] == "reconnect"
+	elif commandName == "database":
+		return commandString == "database"	
 
 	return False		
 

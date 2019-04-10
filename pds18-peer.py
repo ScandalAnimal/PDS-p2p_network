@@ -171,6 +171,11 @@ def handleCommand(command, peer):
 		handleReconnect(peer, args)
 		print ("DID reconnect")
 
+def resetPeerState(peer):
+	peer.currentCommand = None
+	peer.currentCommandParams = []
+	peer.currentPhase = None
+
 def readRpc(file, peer):
 	with open(file, 'r') as f:
 		while not readRpcEvent.is_set():
@@ -178,6 +183,7 @@ def readRpc(file, peer):
 			command = command.replace("\n", "")
 			if command != "" and command != '\n':
 				print ("command: " + command)
+				resetPeerState(peer)
 				handleCommand(command, peer)
 			readRpcEvent.wait(1)	
 

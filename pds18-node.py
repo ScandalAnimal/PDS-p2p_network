@@ -8,7 +8,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs, isCommand
-from util import ServiceException, UniqueIdException, signalHandler
+from util import ServiceException, UniqueIdException, signalHandler, printErr
 from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage
 
 helloCheckEvent = threading.Event()

@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import sys
 import uuid
 import random
 
@@ -23,3 +24,9 @@ def decodeBytes(obj):
         return obj.decode("utf-8")
     else:
     	return obj	
+
+# TODO na konci zmazat decorator
+def printErr(message):
+	print ("###########################################")
+	print("#STDERR: " + message + " #", file=sys.stderr)
+	print ("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")    	

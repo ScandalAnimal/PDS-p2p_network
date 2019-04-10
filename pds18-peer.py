@@ -9,7 +9,7 @@ import os
 from datetime import datetime, timedelta
 from parsers import parsePeerArgs, isCommand
 from protocol import encodeHELLOMessage, encodeGETLISTMessage, encodeACKMessage, encodeMESSAGEMessage, decodeMessage
-from util import ServiceException, UniqueIdException, signalHandler, getRandomId
+from util import ServiceException, UniqueIdException, signalHandler, getRandomId, printErr
 
 helloEvent = threading.Event()
 readRpcEvent = threading.Event()
@@ -19,7 +19,7 @@ messageEvent = threading.Event()
 
 def sendHello(peer, message):
 	while not helloEvent.is_set():
-		print ("sending to address: " + str((peer.regIp, peer.regPort)) + " -> " + str(message))
+		printErr ("sending to address: " + str((peer.regIp, peer.regPort)) + " -> " + str(message))
 		sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 		helloEvent.wait(10)
 	message = encodeHELLOMessage(getRandomId(), peer.username, "0.0.0.0", 0)

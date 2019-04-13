@@ -8,13 +8,14 @@ import os
 import time
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs, isCommand
-from util import ServiceException, UniqueIdException, signalHandler, printErr
-from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage
+from util import ServiceException, Service2Exception, Service3Exception, UniqueIdException, signalHandler, printErr, getRandomId
+from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage, encodeUPDATEMessage
 
 helloCheckEvent = threading.Event()
 printPeerListEvent = threading.Event()
 readRpcEvent = threading.Event()
 getListEvent = threading.Event()
+connectEvent = threading.Event()
 
 class PeerRecordForListMessage:
 	def __init__(self, username, ipv4, port):
@@ -42,6 +43,7 @@ class Node:
 		self.sock = None
 		self.address = None
 		self.acks = {}
+		self.db = {}
 	def __str__(self):
 		return ("Id: " + str(self.id) + ", regIp: " + self.regIp + ", regPort: " + str(self.regPort) + 
 			", Peer count: " + str(self.peerCount) + ", Peer list: " + str(self.peerList))
@@ -57,17 +59,60 @@ class Node:
 				del v['time']
 			items[k] = v
 		return items
+	def getAuthoritativeRecordsForUpdateMessage(self):
+		items = {}
+		for k,v in self.peerList.items():
+			if "time" in v:
+				del v['time']
+			items[k] = v
+
+		dbName = str(self.regIp) + "," + str(self.regPort)
+		db = {str(dbName):items}
+		return db
 	def isPeer(self, address):
 		for k,v in self.peerList.items():
 			if v["ipv4"] == address[0] and v["port"] == address[1]:
 				return True
 		return False		
 
+def sendConnect(node, args):
+	while not connectEvent.is_set():
+
+		try:
+			printErr ("sending connect to node: " + str((args[1], args[2])))
+			txid = getRandomId()
+			print (str(node.getAuthoritativeRecordsForUpdateMessage()))
+			node.sock.settimeout(None)
+			message = encodeUPDATEMessage(txid, node.getAuthoritativeRecordsForUpdateMessage())
+			print (str(message))
+			# sent = node.sock.sendto(message.encode("utf-8"), (args[1], args[2]))
+			connectEvent.wait(4)
+		except ServiceException:
+			printErr ("ServiceException in sendConnect")
+			connectEvent.set()
+			node.sock.settimeout(None)
+			raise Service2Exception
+
 def handleCommand(command, node):
 	print ("NOVY COMMAND: " + str(command))
 	if isCommand("database", command):
 		print ("DATABASE: ")
 		node.printPeerRecords()
+		node.sock.settimeout(None)
+	elif isCommand("connect", command):
+		node.currentCommand = "connect"
+		try:
+			args = command.split()
+			connectThread = threading.Thread(target=sendConnect, kwargs={"node": node, "args": args})
+			connectThread.start()
+		except ServiceException:
+			printErr ("ServiceException in handleCommand")
+			connectEvent.set()
+			connectThread.join()
+			raise Service3Exception
+		finally:
+			connectEvent.clear()
+			node.sock.settimeout(None)
 
 def readRpc(file, node):
 	with open(file, 'r') as f:
@@ -242,6 +287,7 @@ def main():
 		printPeerListThread.join()
 		readRpcEvent.set()
 		readRpcThread.join()
+		connectEvent.set()
 		print ("ServiceException")
 	finally:
 		print ("closing socket")

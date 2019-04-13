@@ -1,27 +1,40 @@
 #!/usr/bin/python
 
 import argparse
+from util import validateIp
+
+def peerUsage(name=None):                                                            
+	return '''pds18-peer.py	[-h] --id <id> --username <string> --chat-ipv4 <ip> --chat-port <int> --reg-ipv4 <ip> --reg-port <int> '''
 
 def parsePeerArgs():
-	parser = argparse.ArgumentParser(allow_abbrev=False)
+	parser = argparse.ArgumentParser(usage=peerUsage(),allow_abbrev=False)
 	parser.add_argument("--id", type=int, required=True, help="Unique peer identificator", metavar="id")
 	parser.add_argument("--username", type=str, required=True, help="Peer username", metavar="username")
 	parser.add_argument("--chat-ipv4", type=str, required=True, help="Address where peer is listening", metavar="chat-ipv4")
 	parser.add_argument("--chat-port", type=int, required=True, help="Port where peer is listening", metavar="chat-port")
 	parser.add_argument("--reg-ipv4", type=str, required=True, help="Address of reg node", metavar="reg-ipv4")
 	parser.add_argument("--reg-port", type=int, required=True, help="Port of reg node", metavar="reg-port")
-	return parser.parse_args()
+	args = parser.parse_args()
+	if (not validateIp(args.chat_ipv4)) or (not validateIp(args.reg_ipv4)):
+		parser.error("Invalid parameters")	
+	return args
+
+def nodeUsage(name=None):                                                            
+	return '''pds18-node.py	[-h] --id <id> --reg-ipv4 <ip> --reg-port <int> '''
 
 def parseNodeArgs():
-	parser = argparse.ArgumentParser(allow_abbrev=False)
+	parser = argparse.ArgumentParser(usage=nodeUsage(),allow_abbrev=False)
 	parser.add_argument("--id", type=int, required=True, help="Unique node identificator", metavar="id")
 	parser.add_argument("--reg-ipv4", type=str, required=True, help="Address of reg node", metavar="reg-ipv4")
 	parser.add_argument("--reg-port", type=int, required=True, help="Port of reg node", metavar="reg-port")
-	return parser.parse_args()
+	args = parser.parse_args()
+	if not validateIp(args.reg_ipv4):
+		parser.error("Invalid parameters")	
+	return args	
 
-def msg(name=None):                                                            
+def rpcUsage(name=None):                                                            
 	return '''pds18-rpc.py
-	[-h] --id id
+	[-h] --id <id>
 	(--peer --command message --from <name1> --to <name2> --message <text> |
 	--peer --command getlist |
 	--peer --command peers |
@@ -34,7 +47,7 @@ def msg(name=None):
 	'''
 
 def parseRpcArgs():
-	parser = argparse.ArgumentParser(usage=msg(),allow_abbrev=False)
+	parser = argparse.ArgumentParser(usage=rpcUsage(),allow_abbrev=False)
 	parser.add_argument("--id", type=int, required=True, help="Unique node/peer identificator", metavar="id")
 	pngroup = parser.add_mutually_exclusive_group(required=True)
 	pngroup.add_argument('--peer', help="Target is peer", action='store_true', dest='peer')
@@ -62,7 +75,10 @@ def parseRpcArgs():
 	if (args.command == 'reconnect' or args.command == 'connect') and (args.reg_ipv4 is None or args.reg_port is None):
 		parser.error("Invalid parameters")	
 
-	return parser.parse_args()
+	if not validateIp(args.reg_ipv4):
+		parser.error("Invalid parameters")	
+
+	return args
 
 def isCommand(commandName, commandString):
 
@@ -77,7 +93,10 @@ def isCommand(commandName, commandString):
 		args = commandString.split()
 		return len(args) == 3 and args[0] == "reconnect"
 	elif commandName == "database":
-		return commandString == "database"	
+		return commandString == "database"
+	elif commandName == "connect":
+		args = commandString.split()
+		return len(args) == 3 and args[0] == "connect"		
 
 	return False		
 

@@ -81,6 +81,12 @@ class Update(Parent):
 		self.type = "update"
 		self.txid = txid
 		self.db = db
+	def toJson(self):
+		params = vars(self)
+		return customEncode(params)
+	def getVars(self):
+		params = vars(self)
+		return customDecode(params)		
 
 class Disconnect(Parent):
 	def __init__(self, txid):

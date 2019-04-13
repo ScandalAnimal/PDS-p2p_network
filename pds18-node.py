@@ -79,13 +79,14 @@ def sendConnect(node, args):
 	while not connectEvent.is_set():
 
 		try:
+			print 
 			printErr ("sending connect to node: " + str((args[1], args[2])))
 			txid = getRandomId()
 			print (str(node.getAuthoritativeRecordsForUpdateMessage()))
 			node.sock.settimeout(None)
 			message = encodeUPDATEMessage(txid, node.getAuthoritativeRecordsForUpdateMessage())
 			print (str(message))
-			# sent = node.sock.sendto(message.encode("utf-8"), (args[1], args[2]))
+			sent = node.sock.sendto(message.encode("utf-8"), (args[1], int(args[2])))
 			connectEvent.wait(4)
 		except ServiceException:
 			printErr ("ServiceException in sendConnect")
@@ -213,6 +214,14 @@ def handleGetList(node, message, address):
 			getListEvent.set()
 			node.sock.settimeout(None)
 			break		
+
+def handleUpdate(node, message):
+	db = message["db"]
+	for k,v in db.items():
+		print( "K: " + str(k))
+		for k1, v1 in v.items():
+			print ("peer: " + str(v1))
+
 				
 def initSocket(node):
 	node.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -272,6 +281,11 @@ def main():
 				elif message["type"] == "ack":
 					node.sock.settimeout(None)
 					handleAck(node, message, datetime.now())
+				elif message["type"] == "update":
+					node.sock.settimeout(None)
+					print ("DOSTAL som UPDATE: ")
+					print (str(message))
+					handleUpdate(node, message)
 				else:
 					print ("DOSTAL som nieco ine")	
 			except socket.timeout:	

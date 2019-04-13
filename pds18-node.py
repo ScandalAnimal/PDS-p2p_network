@@ -39,11 +39,11 @@ class Node:
 		self.regPort = args.reg_port
 		self.peerCount = 0
 		self.peerList = {}
-		self.neighborsPeerList = {}
 		self.sock = None
 		self.address = None
 		self.acks = {}
 		self.db = {}
+		self.neighbors = {}
 	def __str__(self):
 		return ("Id: " + str(self.id) + ", regIp: " + self.regIp + ", regPort: " + str(self.regPort) + 
 			", Peer count: " + str(self.peerCount) + ", Peer list: " + str(self.peerList))
@@ -51,7 +51,7 @@ class Node:
 		print ("My Peers: ")
 		print (str(self.peerList))
 		print ("Neighbors Peers: ")
-		print (str(self.neighborsPeerList))
+		print (str(self.db))
 	def getPeerRecordsForListMessage(self):
 		items = {}
 		for k,v in self.peerList.items():
@@ -87,7 +87,6 @@ def sendConnect(node, args):
 			message = encodeUPDATEMessage(txid, node.getAuthoritativeRecordsForUpdateMessage())
 			print (str(message))
 			sent = node.sock.sendto(message.encode("utf-8"), (args[1], int(args[2])))
-			connectEvent.wait(4)
 		except ServiceException:
 			printErr ("ServiceException in sendConnect")
 			connectEvent.set()
@@ -215,12 +214,15 @@ def handleGetList(node, message, address):
 			node.sock.settimeout(None)
 			break		
 
-def handleUpdate(node, message):
+def handleUpdate(node, message, address):
 	db = message["db"]
+	formattedAddress = str(address[0]) + "," + str(address[1])
+	print ("formattedAddress: " + str(formattedAddress))
 	for k,v in db.items():
 		print( "K: " + str(k))
-		for k1, v1 in v.items():
-			print ("peer: " + str(v1))
+		if k == formattedAddress:
+			node.db[k] = v
+		node.neighbors[k] = k
 
 				
 def initSocket(node):
@@ -285,7 +287,7 @@ def main():
 					node.sock.settimeout(None)
 					print ("DOSTAL som UPDATE: ")
 					print (str(message))
-					handleUpdate(node, message)
+					handleUpdate(node, message, address)
 				else:
 					print ("DOSTAL som nieco ine")	
 			except socket.timeout:	

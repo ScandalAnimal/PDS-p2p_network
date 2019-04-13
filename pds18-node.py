@@ -8,7 +8,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs, isCommand
-from util import ServiceException, Service2Exception, Service3Exception, UniqueIdException, signalHandler, printErr, getRandomId
+from util import ServiceException, UniqueIdException, signalHandler, printErr, getRandomId
 from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage, encodeUPDATEMessage
 
 helloCheckEvent = threading.Event()
@@ -16,6 +16,7 @@ printPeerListEvent = threading.Event()
 readRpcEvent = threading.Event()
 getListEvent = threading.Event()
 connectEvent = threading.Event()
+updateEvent = threading.Event()
 
 class PeerRecordForListMessage:
 	def __init__(self, username, ipv4, port):
@@ -67,13 +68,48 @@ class Node:
 			items[k] = v
 
 		dbName = str(self.regIp) + "," + str(self.regPort)
+		self.db[dbName] = items
 		db = {str(dbName):items}
 		return db
+	def saveAuthoritativeRecords(self):
+		items = {}
+		for k,v in self.peerList.items():
+			if "time" in v:
+				del v['time']
+			items[k] = v
+
+		dbName = str(self.regIp) + "," + str(self.regPort)
+		self.db[dbName] = items
+			
+	def getAllRecordsForUpdateMessage(self):
+		return self.db
+
 	def isPeer(self, address):
 		for k,v in self.peerList.items():
 			if v["ipv4"] == address[0] and v["port"] == address[1]:
 				return True
 		return False		
+
+def sendUpdate(node):
+	while not updateEvent.is_set():
+
+		try:
+			node.saveAuthoritativeRecords()
+
+			for k,v in node.neighbors.items():
+				splitted = k.split(",")
+				ip = splitted[0]
+				port = splitted[1]
+				txid = getRandomId()
+				message = encodeUPDATEMessage(txid, node.getAllRecordsForUpdateMessage())
+				print ("message: " + str(node.getAllRecordsForUpdateMessage()))
+				sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
+			updateEvent.wait(4)
+		except ServiceException:
+			printErr ("ServiceException in sendUpdate")
+			updateEvent.set()
+			node.sock.settimeout(None)
+			raise ServiceException
 
 def sendConnect(node, args):
 	while not connectEvent.is_set():
@@ -87,11 +123,12 @@ def sendConnect(node, args):
 			message = encodeUPDATEMessage(txid, node.getAuthoritativeRecordsForUpdateMessage())
 			print (str(message))
 			sent = node.sock.sendto(message.encode("utf-8"), (args[1], int(args[2])))
+			connectEvent.set()
 		except ServiceException:
 			printErr ("ServiceException in sendConnect")
 			connectEvent.set()
 			node.sock.settimeout(None)
-			raise Service2Exception
+			raise ServiceException
 
 def handleCommand(command, node):
 	print ("NOVY COMMAND: " + str(command))
@@ -109,7 +146,7 @@ def handleCommand(command, node):
 			printErr ("ServiceException in handleCommand")
 			connectEvent.set()
 			connectThread.join()
-			raise Service3Exception
+			raise ServiceException
 		finally:
 			connectEvent.clear()
 			node.sock.settimeout(None)
@@ -131,9 +168,9 @@ def checkPeerList(peerList):
 			now = datetime.now() - timedelta(seconds=30)
 			if "time" in v:
 				time = v["time"]
-			if now > time:
-				toDelete = k
-				break
+				if now > time:
+					toDelete = k
+					break
 		if toDelete != 0:
 			del peerList[toDelete]
 
@@ -257,6 +294,8 @@ def main():
 		helloCheckThread.start()
 		printPeerListThread = threading.Thread(target=printPeerList, kwargs={"node": node})
 		printPeerListThread.start()
+		updateThread = threading.Thread(target=sendUpdate, kwargs={"node": node})
+		updateThread.start()
 
 		readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName, "node": node})
 		readRpcThread.start()
@@ -274,7 +313,7 @@ def main():
 						getListThread = threading.Thread(target=handleGetList, kwargs={"node": node, "message": message, "address": address})
 						getListThread.start()
 					except ServiceException:
-						print ("ServiceException 2")
+						print ("ServiceException")
 						getListEvent.set()
 						getListThread.join()
 						raise ServiceException
@@ -304,6 +343,8 @@ def main():
 		readRpcEvent.set()
 		readRpcThread.join()
 		connectEvent.set()
+		# updateThread.join()
+		updateEvent.set()
 		print ("ServiceException")
 	finally:
 		print ("closing socket")

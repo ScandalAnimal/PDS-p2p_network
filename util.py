@@ -7,12 +7,6 @@ import random
 class ServiceException(Exception):
 	pass
 
-class Service2Exception(Exception):
-	pass
-
-class Service3Exception(Exception):
-	pass	
-
 class UniqueIdException(Exception):
 	pass
 

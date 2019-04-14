@@ -11,14 +11,14 @@ from parsers import parseNodeArgs, isCommand
 from util import ServiceException, UniqueIdException, signalHandler, printErr, getRandomId
 from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage, encodeUPDATEMessage
 
-helloCheckEvent = threading.Event()
+peerCheckEvent = threading.Event()
 printPeerListEvent = threading.Event()
 readRpcEvent = threading.Event()
 getListEvent = threading.Event()
 connectEvent = threading.Event()
 updateEvent = threading.Event()
 
-class PeerRecordForListMessage:
+class PeerRecordForMessage:
 	def __init__(self, username, ipv4, port):
 		self.username = username
 		self.ipv4 = ipv4
@@ -31,7 +31,7 @@ class PeerRecord:
 		self.port = port
 		self.time = time
 	def getRecordForListMessage(self):
-		return PeerRecordForListMessage(self.username, self.ipv4, self.port)
+		return PeerRecordForMessage(self.username, self.ipv4, self.port)
 
 class Node:
 	def __init__(self, args):
@@ -49,6 +49,7 @@ class Node:
 		return ("Id: " + str(self.id) + ", regIp: " + self.regIp + ", regPort: " + str(self.regPort) + 
 			", Peer count: " + str(self.peerCount) + ", Peer list: " + str(self.peerList))
 	def printPeerRecords(self):
+		# print ("")
 		print ("My Peers: ")
 		print (str(self.peerList))
 		print ("Neighbors Peers: ")
@@ -56,33 +57,38 @@ class Node:
 	def getPeerRecordsForListMessage(self):
 		items = {}
 		for k,v in self.peerList.items():
-			if "time" in v:
-				del v['time']
-			items[k] = v
+			items[k] = vars(PeerRecordForMessage(v["username"], v["ipv4"], v["port"]))
 		return items
 	def getAuthoritativeRecordsForUpdateMessage(self):
 		items = {}
 		for k,v in self.peerList.items():
-			if "time" in v:
-				del v['time']
-			items[k] = v
-
+			items[k] = vars(PeerRecordForMessage(v["username"], v["ipv4"], v["port"]))
 		dbName = str(self.regIp) + "," + str(self.regPort)
 		self.db[dbName] = items
 		db = {str(dbName):items}
 		return db
 	def saveAuthoritativeRecords(self):
 		items = {}
+		# print ("PEERLIST: " + str(self.peerList))
 		for k,v in self.peerList.items():
-			if "time" in v:
-				del v['time']
-			items[k] = v
-
+			items[k] = vars(PeerRecordForMessage(v["username"], v["ipv4"], v["port"]))
+			# items[k] = v
+		# print ("PEERLIST: " + str(self.peerList))
 		dbName = str(self.regIp) + "," + str(self.regPort)
 		self.db[dbName] = items
 			
 	def getAllRecordsForUpdateMessage(self):
-		return self.db
+		items = {}
+		for k,v in self.db.items():
+			print ("K: " + str(k))
+			print ("V: " + str(v))
+			if "time" in v:
+				for k1, v1 in v.items():
+					if k1 != "time":
+						items[k] = vars(PeerRecordForMessage(v1["username"], v1["ipv4"], v1["port"]))
+			else:
+				items[k] = v
+		return items
 
 	def isPeer(self, address):
 		for k,v in self.peerList.items():
@@ -100,9 +106,15 @@ def sendUpdate(node):
 				splitted = k.split(",")
 				ip = splitted[0]
 				port = splitted[1]
+				# print ("MESSAGE TO: " + ip + " " + port)
+				# print ("ME: " + str(node.regIp) + " " + str(node.regPort))
+				if (str(ip) == str(node.regIp)) and (str(port) == str(node.regPort)):
+					# print ("SENDING TO MYSELF")
+					continue
+				# print ("AFTER")	
 				txid = getRandomId()
 				message = encodeUPDATEMessage(txid, node.getAllRecordsForUpdateMessage())
-				print ("message: " + str(node.getAllRecordsForUpdateMessage()))
+				# print ("message: " + str(node.getAllRecordsForUpdateMessage()))
 				sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
 			updateEvent.wait(4)
 		except ServiceException:
@@ -115,13 +127,12 @@ def sendConnect(node, args):
 	while not connectEvent.is_set():
 
 		try:
-			print 
-			printErr ("sending connect to node: " + str((args[1], args[2])))
+			# printErr ("sending connect to node: " + str((args[1], args[2])))
 			txid = getRandomId()
-			print (str(node.getAuthoritativeRecordsForUpdateMessage()))
+			# print (str(node.getAuthoritativeRecordsForUpdateMessage()))
 			node.sock.settimeout(None)
 			message = encodeUPDATEMessage(txid, node.getAuthoritativeRecordsForUpdateMessage())
-			print (str(message))
+			# print (str(message))
 			sent = node.sock.sendto(message.encode("utf-8"), (args[1], int(args[2])))
 			connectEvent.set()
 		except ServiceException:
@@ -131,9 +142,9 @@ def sendConnect(node, args):
 			raise ServiceException
 
 def handleCommand(command, node):
-	print ("NOVY COMMAND: " + str(command))
+	# print ("NOVY COMMAND: " + str(command))
 	if isCommand("database", command):
-		print ("DATABASE: ")
+		# print ("DATABASE: ")
 		node.printPeerRecords()
 		node.sock.settimeout(None)
 	elif isCommand("connect", command):
@@ -157,14 +168,16 @@ def readRpc(file, node):
 			command = f.readline()
 			command = command.replace("\n", "")
 			if command != "" and command != '\n':
-				print ("command: " + command)
+				# print ("command: " + command)
 				handleCommand(command, node)
 			readRpcEvent.wait(1)		
 
-def checkPeerList(peerList):
-	while not helloCheckEvent.is_set():
+def checkPeerList(node):
+	while not peerCheckEvent.is_set():
 		toDelete = 0
-		for k,v in peerList.items():
+		# print (str(node.peerList))
+		for k,v in node.peerList.items():
+			# print ("checking: " + str(v))
 			now = datetime.now() - timedelta(seconds=30)
 			if "time" in v:
 				time = v["time"]
@@ -172,23 +185,35 @@ def checkPeerList(peerList):
 					toDelete = k
 					break
 		if toDelete != 0:
-			del peerList[toDelete]
+			del node.peerList[toDelete]
 
-		helloCheckEvent.wait(1)
+		toDelete = 0
+		for k,v in node.db.items():
+			# print ("checking: " + str(v))
+			now = datetime.now() - timedelta(seconds=12)
+			if "time" in v:
+				time = v["time"]
+				if now > time:
+					toDelete = k
+					break
+		if toDelete != 0:
+			del node.db[toDelete]
+
+		peerCheckEvent.wait(5)
 
 def printPeerList(node):
 	while not printPeerListEvent.is_set():
-		print ("**")
+		print ("**PEERS**")
 		node.printPeerRecords()
 		print ("**")
 
-		helloCheckEvent.wait(10)
+		peerCheckEvent.wait(10)
 
 def handleAck(node, message, time):
-	print ("DOSTAL SOM ACK")
+	# print ("DOSTAL SOM ACK")
 
 	if message["txid"] in node.acks:
-		print ("KLUC existuje")
+		# print ("KLUC existuje")
 		allowed = time - timedelta(seconds=2)
 		if allowed < node.acks[message["txid"]]:
 			print ("ACK ok")
@@ -200,20 +225,22 @@ def handleAck(node, message, time):
 		print ("KLUC neexistuje - to je asi ok, je nam to jedno")
 
 def handleHello(node, message):
-	print ("DOSTAL SOM HELLO")
+	# print ("DOSTAL SOM HELLO")
 				
 	duplicity = False
-	toDelete = 0
+	toDelete = False
 	for k,v in node.peerList.items():
 		if v["username"] == message["username"]:
 			if message["ipv4"] == "0.0.0.0" and message["port"] == 0:
 				toDelete = k
 				duplicity = True
 			else:	
+				print ("ALREADY")
 				duplicity = True
 				v["time"] = datetime.now()
+				node.peerList[k] = v
 				break	
-	if toDelete != 0:
+	if toDelete != False:
 		del node.peerList[toDelete]
 
 	if not duplicity:
@@ -222,16 +249,16 @@ def handleHello(node, message):
 
 def sendAck(node, txid, address):
 	ack = encodeACKMessage(txid)
-	print ("ACK: " + str(ack))
+	# print ("ACK: " + str(ack))
 	sent = node.sock.sendto(ack.encode("utf-8"), address)
 
 def handleGetList(node, message, address):
-	print ("DOSTAL SOM GETLIST: " + str(message))
+	# print ("DOSTAL SOM GETLIST: " + str(message))
 
 	while not getListEvent.is_set():
 		node.sock.settimeout(2)
 		if not node.isPeer(address):
-			print ("dostal som GETLIST od cudzieho peera")
+			# print ("dostal som GETLIST od cudzieho peera")
 			getListEvent.set()
 			node.sock.settimeout(None)
 			break
@@ -240,7 +267,7 @@ def handleGetList(node, message, address):
 		try:
 			listMessage = encodeLISTMessage(message["txid"], node.getPeerRecordsForListMessage())
 
-			print ("LIST: " + str(listMessage))
+			# print ("LIST: " + str(listMessage))
 			sent = node.sock.sendto(listMessage.encode("utf-8"), address)
 			node.sock.settimeout(2)
 			node.acks[message["txid"]] = datetime.now()
@@ -254,10 +281,11 @@ def handleGetList(node, message, address):
 def handleUpdate(node, message, address):
 	db = message["db"]
 	formattedAddress = str(address[0]) + "," + str(address[1])
-	print ("formattedAddress: " + str(formattedAddress))
+	# print ("formattedAddress: " + str(formattedAddress))
 	for k,v in db.items():
 		print( "K: " + str(k))
 		if k == formattedAddress:
+			v["time"] = datetime.now()
 			node.db[k] = v
 		node.neighbors[k] = k
 
@@ -265,16 +293,16 @@ def handleUpdate(node, message, address):
 def initSocket(node):
 	node.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	node.address = (node.regIp, node.regPort)
-	print ("starting up on %s port %s" % node.address)
+	# print ("starting up on %s port %s" % node.address)
 	node.sock.bind(node.address)
 
 def main():
-	print ("NODE")
+	# print ("NODE")
 
 	args = parseNodeArgs()
 
 	node = Node(args)
-	print ("Node:" + str(node))
+	# print ("Node:" + str(node))
 
 	rpcFilePath = ""
 	try:
@@ -290,8 +318,8 @@ def main():
 
 		signal.signal(signal.SIGINT, signalHandler)
 	
-		helloCheckThread = threading.Thread(target=checkPeerList, kwargs={"peerList": node.peerList})
-		helloCheckThread.start()
+		peerCheckThread = threading.Thread(target=checkPeerList, kwargs={"node": node})
+		peerCheckThread.start()
 		printPeerListThread = threading.Thread(target=printPeerList, kwargs={"node": node})
 		printPeerListThread.start()
 		updateThread = threading.Thread(target=sendUpdate, kwargs={"node": node})
@@ -304,7 +332,7 @@ def main():
 			try:
 				data, address = node.sock.recvfrom(4096)
 				
-				print ("ADDRESS: " + str(address))
+				# print ("ADDRESS: " + str(address))
 				message = decodeMessage(data.decode("utf-8")).getVars()
 				if message["type"] == "hello":
 					handleHello(node, message)
@@ -324,8 +352,8 @@ def main():
 					handleAck(node, message, datetime.now())
 				elif message["type"] == "update":
 					node.sock.settimeout(None)
-					print ("DOSTAL som UPDATE: ")
-					print (str(message))
+					# print ("DOSTAL som UPDATE: ")
+					# print (str(message))
 					handleUpdate(node, message, address)
 				else:
 					print ("DOSTAL som nieco ine")	
@@ -336,14 +364,13 @@ def main():
 		print ("UniqueIdException")
 	
 	except ServiceException:
-		helloCheckEvent.set()
-		helloCheckThread.join()
+		peerCheckEvent.set()
+		peerCheckThread.join()
 		printPeerListEvent.set()
 		printPeerListThread.join()
 		readRpcEvent.set()
 		readRpcThread.join()
 		connectEvent.set()
-		# updateThread.join()
 		updateEvent.set()
 		print ("ServiceException")
 	finally:

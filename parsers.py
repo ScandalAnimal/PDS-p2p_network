@@ -75,8 +75,9 @@ def parseRpcArgs():
 	if (args.command == 'reconnect' or args.command == 'connect') and (args.reg_ipv4 is None or args.reg_port is None):
 		parser.error("Invalid parameters")	
 
-	if not validateIp(args.reg_ipv4):
-		parser.error("Invalid parameters")	
+	if args.reg_ipv4 != None:
+		if not validateIp(args.reg_ipv4):
+			parser.error("Invalid parameters")	
 
 	return args
 
@@ -96,7 +97,9 @@ def isCommand(commandName, commandString):
 		return commandString == "database"
 	elif commandName == "connect":
 		args = commandString.split()
-		return len(args) == 3 and args[0] == "connect"		
+		return len(args) == 3 and args[0] == "connect"
+	elif commandName == "neighbors":
+		return commandString == "neighbors"		
 
 	return False		
 

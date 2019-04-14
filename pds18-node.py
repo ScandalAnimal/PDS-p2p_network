@@ -141,6 +141,9 @@ def sendConnect(node, args):
 			node.sock.settimeout(None)
 			raise ServiceException
 
+def handleNeighbors(node):
+	print ("NEIGHBORS: " + str(node.neighbors))
+
 def handleCommand(command, node):
 	# print ("NOVY COMMAND: " + str(command))
 	if isCommand("database", command):
@@ -161,6 +164,9 @@ def handleCommand(command, node):
 		finally:
 			connectEvent.clear()
 			node.sock.settimeout(None)
+	elif isCommand("neighbors", command):
+		handleNeighbors(node)
+		node.sock.settimeout(None)		
 
 def readRpc(file, node):
 	with open(file, 'r') as f:

@@ -99,7 +99,9 @@ def isCommand(commandName, commandString):
 		args = commandString.split()
 		return len(args) == 3 and args[0] == "connect"
 	elif commandName == "neighbors":
-		return commandString == "neighbors"		
+		return commandString == "neighbors"	
+	elif commandName == "sync":
+		return commandString == "sync"			
 
 	return False		
 

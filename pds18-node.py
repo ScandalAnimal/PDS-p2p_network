@@ -141,6 +141,25 @@ def sendConnect(node, args):
 			node.sock.settimeout(None)
 			raise ServiceException
 
+def handleSync(node):
+
+	try:
+		node.saveAuthoritativeRecords()
+
+		for k,v in node.neighbors.items():
+			splitted = k.split(",")
+			ip = splitted[0]
+			port = splitted[1]
+			if (str(ip) == str(node.regIp)) and (str(port) == str(node.regPort)):
+				continue
+			txid = getRandomId()
+			message = encodeUPDATEMessage(txid, node.getAllRecordsForUpdateMessage())
+			sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
+	except ServiceException:
+		printErr ("ServiceException in handleSync")
+		node.sock.settimeout(None)
+		raise ServiceException
+
 def handleNeighbors(node):
 	print ("NEIGHBORS: " + str(node.neighbors))
 
@@ -166,7 +185,10 @@ def handleCommand(command, node):
 			node.sock.settimeout(None)
 	elif isCommand("neighbors", command):
 		handleNeighbors(node)
-		node.sock.settimeout(None)		
+		node.sock.settimeout(None)	
+	elif isCommand("sync", command):
+		handleSync(node)
+		node.sock.settimeout(None)			
 
 def readRpc(file, node):
 	with open(file, 'r') as f:
@@ -358,7 +380,7 @@ def main():
 					handleAck(node, message, datetime.now())
 				elif message["type"] == "update":
 					node.sock.settimeout(None)
-					# print ("DOSTAL som UPDATE: ")
+					print ("DOSTAL som UPDATE: ")
 					# print (str(message))
 					handleUpdate(node, message, address)
 				else:

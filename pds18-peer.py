@@ -19,11 +19,11 @@ messageEvent = threading.Event()
 
 def sendHello(peer, message):
 	while not helloEvent.is_set():
-		printErr ("sending to address: " + str((peer.regIp, peer.regPort)) + " -> " + str(message))
+		# printErr ("sending to address: " + str((peer.regIp, peer.regPort)) + " -> " + str(message))
 		sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 		helloEvent.wait(10)
 	message = encodeHELLOMessage(getRandomId(), peer.username, "0.0.0.0", 0)
-	printErr ("hello: " + message)
+	# printErr ("hello: " + message)
 	sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 
 def handleAck(peer, message, time):
@@ -50,6 +50,7 @@ def sendGetList(peer):
 		peer.acks[txid] = datetime.now()
 		peer.currentPhase = 1
 		getListEvent.set()
+		print ("SENT GETLIST")
 
 def sendAck(peer, txid, address):
 	ack = encodeACKMessage(txid)
@@ -71,6 +72,7 @@ def sendPeers(peer):
 			getListEvent.clear()
 			peersEvent.set()
 
+		print ("SENT PEERS")
 		peer.currentPhase = 2
 
 def findUserInPeerList(peers, user):
@@ -82,7 +84,7 @@ def findUserInPeerList(peers, user):
 def sendMessage(peer, peerList):
 	while not messageEvent.is_set():
 		to = peer.currentCommandParams[2]
-		contents = peer.currentCommandParams[3]
+		contents = peer.currentCommandParams[3:]
 		recipientAddress = findUserInPeerList(peerList, to)
 		if recipientAddress:
 			peer.sock.settimeout(2)
@@ -170,6 +172,8 @@ def handleCommand(command, peer):
 		args = command.split()
 		handleReconnect(peer, args)
 		printErr ("DID reconnect")
+	else:
+		print ("ZIADNY COMMAND")	
 
 def resetPeerState(peer):
 	peer.currentCommand = None
@@ -235,7 +239,7 @@ def main():
 		signal.signal(signal.SIGINT, signalHandler)
 	
 		helloMessage = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
-		printErr ("hello: " + helloMessage)
+		# printErr ("hello: " + helloMessage)
 		helloThread = threading.Thread(target=sendHello, kwargs={"peer": peer, "message": helloMessage})
 		helloThread.start()
 
@@ -250,6 +254,7 @@ def main():
 				if message["type"] == 'ack':
 					if peer.currentCommand == "getlist" and peer.currentPhase == 1:
 						peer.sock.settimeout(None)
+						print ("ACK NA GETLIST")
 						handleAck(peer, message, datetime.now())
 					elif peer.currentCommand == "message" and peer.currentPhase == 3:
 						peer.sock.settimeout(None)

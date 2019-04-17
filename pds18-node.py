@@ -8,8 +8,8 @@ import os
 import time
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs, isCommand
-from util import ServiceException, UniqueIdException, signalHandler, printErr, getRandomId
-from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage, encodeUPDATEMessage
+from util import InterruptException, UniqueIdException, signalHandler, printErr, getRandomId
+from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage, encodeUPDATEMessage, encodeDISCONNECTMessage
 
 peerCheckEvent = threading.Event()
 printPeerListEvent = threading.Event()
@@ -17,6 +17,7 @@ readRpcEvent = threading.Event()
 getListEvent = threading.Event()
 connectEvent = threading.Event()
 updateEvent = threading.Event()
+disconnectEvent = threading.Event()
 
 class PeerRecordForMessage:
 	def __init__(self, username, ipv4, port):
@@ -117,11 +118,11 @@ def sendUpdate(node):
 				# print ("message: " + str(node.getAllRecordsForUpdateMessage()))
 				sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
 			updateEvent.wait(4)
-		except ServiceException:
-			printErr ("ServiceException in sendUpdate")
+		except InterruptException:
+			printErr ("InterruptException in sendUpdate")
 			updateEvent.set()
 			node.sock.settimeout(None)
-			raise ServiceException
+			raise InterruptException
 
 def sendConnect(node, args):
 	while not connectEvent.is_set():
@@ -135,11 +136,38 @@ def sendConnect(node, args):
 			# print (str(message))
 			sent = node.sock.sendto(message.encode("utf-8"), (args[1], int(args[2])))
 			connectEvent.set()
-		except ServiceException:
-			printErr ("ServiceException in sendConnect")
+		except InterruptException:
+			printErr ("InterruptException in sendConnect")
 			connectEvent.set()
 			node.sock.settimeout(None)
-			raise ServiceException
+			raise InterruptException
+
+def sendDisconnect(node):
+	while not disconnectEvent.is_set():
+
+		try:
+			for k,v in node.neighbors.items():
+				splitted = k.split(",")
+				ip = splitted[0]
+				port = splitted[1]
+				if (str(ip) == str(node.regIp)) and (str(port) == str(node.regPort)):
+					continue
+				txid = getRandomId()
+				message = encodeDISCONNECTMessage(txid)
+				sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
+				node.acks[txid] = datetime.now()
+
+			node.db.clear()
+			node.neighbors.clear()
+			node.saveAuthoritativeRecords()
+
+			disconnectEvent.set()
+
+		except InterruptException:
+			printErr ("InterruptException in sendDisconnect")
+			disconnectEvent.set()
+			node.sock.settimeout(None)
+			raise InterruptException			
 
 def handleSync(node):
 
@@ -155,10 +183,10 @@ def handleSync(node):
 			txid = getRandomId()
 			message = encodeUPDATEMessage(txid, node.getAllRecordsForUpdateMessage())
 			sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
-	except ServiceException:
-		printErr ("ServiceException in handleSync")
+	except InterruptException:
+		printErr ("InterruptException in handleSync")
 		node.sock.settimeout(None)
-		raise ServiceException
+		raise InterruptException
 
 def handleNeighbors(node):
 	print ("NEIGHBORS: " + str(node.neighbors))
@@ -175,11 +203,11 @@ def handleCommand(command, node):
 			args = command.split()
 			connectThread = threading.Thread(target=sendConnect, kwargs={"node": node, "args": args})
 			connectThread.start()
-		except ServiceException:
-			printErr ("ServiceException in handleCommand")
+		except InterruptException:
+			printErr ("InterruptException in handleCommand")
 			connectEvent.set()
 			connectThread.join()
-			raise ServiceException
+			raise InterruptException
 		finally:
 			connectEvent.clear()
 			node.sock.settimeout(None)
@@ -188,7 +216,20 @@ def handleCommand(command, node):
 		node.sock.settimeout(None)	
 	elif isCommand("sync", command):
 		handleSync(node)
-		node.sock.settimeout(None)			
+		node.sock.settimeout(None)		
+	elif isCommand("disconnect", command):
+		node.currentCommand = "disconnect"
+		try:
+			disconnectThread = threading.Thread(target=sendDisconnect, kwargs={"node": node})
+			disconnectThread.start()
+		except InterruptException:
+			printErr ("InterruptException in handleCommand")
+			disconnectEvent.set()
+			disconnectThread.join()
+			raise InterruptException
+		finally:
+			disconnectEvent.clear()
+			node.sock.settimeout(None)
 
 def readRpc(file, node):
 	with open(file, 'r') as f:
@@ -317,7 +358,27 @@ def handleUpdate(node, message, address):
 			node.db[k] = v
 		node.neighbors[k] = k
 
-				
+def handleDisconnect(node, txid, address):
+	disconnectIp = address[0]
+	disconnectPort = address[1]
+	disconnectAddress = str(disconnectIp) + "," + str(disconnectPort)
+	print ("DISC ADDRESS: " + str(disconnectAddress))
+	sendAck(node, txid, address)
+	toDelete = 0
+	for k,v in node.db.items():
+		if k == str(disconnectAddress):
+			toDelete = k
+			break
+	if toDelete != 0:
+		del node.db[toDelete]	
+	toDelete = 0
+	for k,v in node.neighbors.items():
+		if k == str(disconnectAddress):
+			toDelete = k
+			break
+	if toDelete != 0:
+		del node.neighbors[toDelete]
+
 def initSocket(node):
 	node.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	node.address = (node.regIp, node.regPort)
@@ -368,11 +429,11 @@ def main():
 					try:
 						getListThread = threading.Thread(target=handleGetList, kwargs={"node": node, "message": message, "address": address})
 						getListThread.start()
-					except ServiceException:
-						print ("ServiceException")
+					except InterruptException:
+						print ("InterruptException")
 						getListEvent.set()
 						getListThread.join()
-						raise ServiceException
+						raise InterruptException
 					finally:
 						getListEvent.clear()	
 				elif message["type"] == "ack":
@@ -383,6 +444,10 @@ def main():
 					print ("DOSTAL som UPDATE: ")
 					# print (str(message))
 					handleUpdate(node, message, address)
+				elif message["type"] == "disconnect":	
+					print ("DISCONNECT")
+					node.sock.settimeout(None)
+					handleDisconnect(node, message["txid"], address)
 				else:
 					print ("DOSTAL som nieco ine")	
 			except socket.timeout:	
@@ -391,7 +456,7 @@ def main():
 	except UniqueIdException:
 		print ("UniqueIdException")
 	
-	except ServiceException:
+	except InterruptException:
 		peerCheckEvent.set()
 		peerCheckThread.join()
 		printPeerListEvent.set()
@@ -399,8 +464,9 @@ def main():
 		readRpcEvent.set()
 		readRpcThread.join()
 		connectEvent.set()
+		disconnectEvent.set()
 		updateEvent.set()
-		print ("ServiceException")
+		print ("InterruptException")
 	finally:
 		print ("closing socket")
 		if os.path.isfile(rpcFilePath):

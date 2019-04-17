@@ -4,7 +4,7 @@ import sys
 import uuid
 import random
 
-class ServiceException(Exception):
+class InterruptException(Exception):
 	pass
 
 class UniqueIdException(Exception):
@@ -12,7 +12,7 @@ class UniqueIdException(Exception):
 
 def signalHandler(signum, frame):
 	printErr ('Caught signal %d' % signum)
-	raise ServiceException
+	raise InterruptException
 
 def getRandomId():
 	return random.randint(1,60000)

@@ -9,7 +9,7 @@ import os
 from datetime import datetime, timedelta
 from parsers import parsePeerArgs, isCommand
 from protocol import encodeHELLOMessage, encodeGETLISTMessage, encodeACKMessage, encodeMESSAGEMessage, decodeMessage
-from util import ServiceException, UniqueIdException, signalHandler, getRandomId, printErr
+from util import InterruptException, UniqueIdException, signalHandler, getRandomId, printErr
 
 helloEvent = threading.Event()
 readRpcEvent = threading.Event()
@@ -62,11 +62,11 @@ def sendPeers(peer):
 		try:
 			getListThread = threading.Thread(target=sendGetList, kwargs={"peer": peer})
 			getListThread.start()
-		except ServiceException:
-			printErr ("ServiceException in handleCommand")
+		except InterruptException:
+			printErr ("InterruptException in handleCommand")
 			getListEvent.set()
 			getListThread.join()
-			raise ServiceException
+			raise InterruptException
 		finally:
 			getListEvent.clear()
 			peersEvent.set()
@@ -102,11 +102,11 @@ def handleMessage(peer, peerList):
 	try:
 		messageThread = threading.Thread(target=sendMessage, kwargs={"peer": peer, "peerList": peerList})
 		messageThread.start()
-	except ServiceException:
-		printErr ("ServiceException in handleCommand")
+	except InterruptException:
+		printErr ("InterruptException in handleCommand")
 		messageEvent.set()
 		messageThread.join()
-		raise ServiceException
+		raise InterruptException
 	finally:
 		messageEvent.clear()
 	
@@ -130,11 +130,11 @@ def handleCommand(command, peer):
 		try:
 			getListThread = threading.Thread(target=sendGetList, kwargs={"peer": peer})
 			getListThread.start()
-		except ServiceException:
-			printErr ("ServiceException in handleCommand")
+		except InterruptException:
+			printErr ("InterruptException in handleCommand")
 			getListEvent.set()
 			getListThread.join()
-			raise ServiceException
+			raise InterruptException
 		finally:
 			getListEvent.clear()
 	elif isCommand("peers", command):
@@ -142,11 +142,11 @@ def handleCommand(command, peer):
 		try:
 			peersThread = threading.Thread(target=sendPeers, kwargs={"peer": peer})
 			peersThread.start()
-		except ServiceException:
-			printErr ("ServiceException in handleCommand")
+		except InterruptException:
+			printErr ("InterruptException in handleCommand")
 			peersEvent.set()
 			peersThread.join()
-			raise ServiceException
+			raise InterruptException
 		finally:
 			peersEvent.clear()
 	elif isCommand("message", command):
@@ -159,11 +159,11 @@ def handleCommand(command, peer):
 			try:
 				messageThread = threading.Thread(target=sendPeers, kwargs={"peer": peer})
 				messageThread.start()
-			except ServiceException:
-				printErr ("ServiceException in handleCommand")
+			except InterruptException:
+				printErr ("InterruptException in handleCommand")
 				messageEvent.set()
 				messageThread.join()
-				raise ServiceException
+				raise InterruptException
 			finally:
 				messageEvent.clear()
 	elif isCommand("reconnect", command):
@@ -276,8 +276,8 @@ def main():
 	except UniqueIdException:
 		printErr ("UniqueIdException")
 
-	except ServiceException:
-		printErr ("ServiceException")
+	except InterruptException:
+		printErr ("InterruptException")
 		helloEvent.set()
 		helloThread.join()
 		readRpcEvent.set()

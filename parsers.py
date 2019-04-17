@@ -101,7 +101,9 @@ def isCommand(commandName, commandString):
 	elif commandName == "neighbors":
 		return commandString == "neighbors"	
 	elif commandName == "sync":
-		return commandString == "sync"			
+		return commandString == "sync"
+	elif commandName == "disconnect":
+		return commandString == "disconnect"				
 
 	return False		
 

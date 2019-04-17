@@ -44,6 +44,8 @@ def rpcUsage(name=None):
 	--node --command connect --reg-ipv4 <ip> --reg-port <int> |
 	--node --command disconnect |
 	--node --command sync)
+	
+	note: if you want to send message with more than 1 word, surround text with double qoutes
 	'''
 
 def parseRpcArgs():

@@ -464,6 +464,7 @@ def main():
 		readRpcEvent.set()
 		readRpcThread.join()
 		connectEvent.set()
+		sendDisconnect(node)
 		disconnectEvent.set()
 		updateEvent.set()
 		print ("InterruptException")

@@ -8,11 +8,10 @@ import os
 import time
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs, isCommand
-from util import InterruptException, UniqueIdException, signalHandler, printErr, getRandomId, printCorrectErr
-from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage, encodeUPDATEMessage, encodeDISCONNECTMessage
+from util import InterruptException, UniqueIdException, signalHandler, printErr, getRandomId, printCorrectErr, printDebug
+from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage, encodeUPDATEMessage, encodeDISCONNECTMessage, encodeERRORMessage
 
 peerCheckEvent = threading.Event()
-printPeerListEvent = threading.Event()
 readRpcEvent = threading.Event()
 getListEvent = threading.Event()
 connectEvent = threading.Event()
@@ -50,11 +49,17 @@ class Node:
 		return ("Id: " + str(self.id) + ", regIp: " + self.regIp + ", regPort: " + str(self.regPort) + 
 			", Peer count: " + str(self.peerCount) + ", Peer list: " + str(self.peerList))
 	def printPeerRecords(self):
-		# print ("")
-		print ("My Peers: ")
-		print (str(self.peerList))
-		print ("Neighbors Peers: ")
-		print (str(self.db))
+		print ("-------------------------------------------------------------------")
+		print ("|DATABASE")
+		print ("|Authoritative: ")
+		for k,v in self.peerList.items():
+			print ("|Username: %10s, IP address: %15s, Port: %8d " % (v["username"], v["ipv4"], v["port"]))
+		print ("|")	
+		print ("|All: ")
+		for k,v in self.db.items():
+			for k1, v1 in v.items():
+				print ("|Username: %10s, IP address: %15s, Port: %8d " % (v1["username"], v1["ipv4"], v1["port"]))
+		print ("-------------------------------------------------------------------")
 	def getPeerRecordsForListMessage(self):
 		items = {}
 		for k,v in self.peerList.items():
@@ -119,27 +124,24 @@ def sendUpdate(node):
 				sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
 			updateEvent.wait(4)
 		except InterruptException:
-			printErr ("InterruptException in sendUpdate")
+			printCorrectErr ("InterruptException in sendUpdate")
 			updateEvent.set()
-			node.sock.settimeout(None)
 			raise InterruptException
 
 def sendConnect(node, args):
 	while not connectEvent.is_set():
 
 		try:
-			# printErr ("sending connect to node: " + str((args[1], args[2])))
+			printErr ("sending connect to node: " + str((args[1], args[2])))
 			txid = getRandomId()
-			# print (str(node.getAuthoritativeRecordsForUpdateMessage()))
-			node.sock.settimeout(None)
+			print (str(node.getAuthoritativeRecordsForUpdateMessage()))
 			message = encodeUPDATEMessage(txid, node.getAuthoritativeRecordsForUpdateMessage())
-			# print (str(message))
+			print (str(message))
 			sent = node.sock.sendto(message.encode("utf-8"), (args[1], int(args[2])))
 			connectEvent.set()
 		except InterruptException:
-			printErr ("InterruptException in sendConnect")
+			printCorrectErr ("InterruptException in sendConnect")
 			connectEvent.set()
-			node.sock.settimeout(None)
 			raise InterruptException
 
 def sendDisconnect(node):
@@ -164,9 +166,8 @@ def sendDisconnect(node):
 			disconnectEvent.set()
 
 		except InterruptException:
-			printErr ("InterruptException in sendDisconnect")
+			printCorrectErr ("InterruptException in sendDisconnect")
 			disconnectEvent.set()
-			node.sock.settimeout(None)
 			raise InterruptException			
 
 def handleSync(node):
@@ -184,19 +185,15 @@ def handleSync(node):
 			message = encodeUPDATEMessage(txid, node.getAllRecordsForUpdateMessage())
 			sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
 	except InterruptException:
-		printErr ("InterruptException in handleSync")
-		node.sock.settimeout(None)
+		printCorrectErr ("InterruptException in handleSync")
 		raise InterruptException
 
 def handleNeighbors(node):
 	print ("NEIGHBORS: " + str(node.neighbors))
 
 def handleCommand(command, node):
-	# print ("NOVY COMMAND: " + str(command))
 	if isCommand("database", command):
-		# print ("DATABASE: ")
 		node.printPeerRecords()
-		node.sock.settimeout(None)
 	elif isCommand("connect", command):
 		node.currentCommand = "connect"
 		try:
@@ -204,32 +201,28 @@ def handleCommand(command, node):
 			connectThread = threading.Thread(target=sendConnect, kwargs={"node": node, "args": args})
 			connectThread.start()
 		except InterruptException:
-			printErr ("InterruptException in handleCommand")
+			printCorrectErr ("InterruptException in handleCommand")
 			connectEvent.set()
 			connectThread.join()
 			raise InterruptException
 		finally:
 			connectEvent.clear()
-			node.sock.settimeout(None)
 	elif isCommand("neighbors", command):
 		handleNeighbors(node)
-		node.sock.settimeout(None)	
 	elif isCommand("sync", command):
 		handleSync(node)
-		node.sock.settimeout(None)		
 	elif isCommand("disconnect", command):
 		node.currentCommand = "disconnect"
 		try:
 			disconnectThread = threading.Thread(target=sendDisconnect, kwargs={"node": node})
 			disconnectThread.start()
 		except InterruptException:
-			printErr ("InterruptException in handleCommand")
+			printCorrectErr ("InterruptException in handleCommand")
 			disconnectEvent.set()
 			disconnectThread.join()
 			raise InterruptException
 		finally:
 			disconnectEvent.clear()
-			node.sock.settimeout(None)
 
 def readRpc(file, node):
 	with open(file, 'r') as f:
@@ -270,14 +263,6 @@ def checkPeerList(node):
 
 		peerCheckEvent.wait(5)
 
-def printPeerList(node):
-	while not printPeerListEvent.is_set():
-		print ("**PEERS**")
-		node.printPeerRecords()
-		print ("**")
-
-		peerCheckEvent.wait(10)
-
 def handleAck(node, message, time):
 	# print ("DOSTAL SOM ACK")
 
@@ -294,7 +279,7 @@ def handleAck(node, message, time):
 		print ("KLUC neexistuje - to je asi ok, je nam to jedno")
 
 def handleHello(node, message):
-	printCorrectErr ("HELLO from: " + str(message["ipv4"]) + "," + str(message["port"]))
+	printDebug ("HELLO from: " + str(message["ipv4"]) + "," + str(message["port"]))
 				
 	duplicity = False
 	toDelete = False
@@ -304,7 +289,6 @@ def handleHello(node, message):
 				toDelete = k
 				duplicity = True
 			else:	
-				print ("ALREADY")
 				duplicity = True
 				v["time"] = datetime.now()
 				node.peerList[k] = v
@@ -318,34 +302,29 @@ def handleHello(node, message):
 
 def sendAck(node, txid, address):
 	ack = encodeACKMessage(txid)
-	# print ("ACK: " + str(ack))
+	printDebug ("ACK: " + str(ack) + ", " + str(address))
 	sent = node.sock.sendto(ack.encode("utf-8"), address)
 
+def sendError(node, txid, address, message):
+	err = encodeERRORMessage(txid, message)
+	sent = node.sock.sendto(err.encode("utf-8"), address)
+
 def handleGetList(node, message, address):
-	printCorrectErr ("GETLIST from: " + str(address))
+	printDebug ("GETLIST from: " + str(address))
 
 	while not getListEvent.is_set():
-		node.sock.settimeout(2)
 		if not node.isPeer(address):
-			# print ("dostal som GETLIST od cudzieho peera")
+			printCorrectErr ("GETLIST is from foreign peer, killing it")
 			getListEvent.set()
-			node.sock.settimeout(None)
+			sendError(node, message["txid"], address, "You tried to get peer list from node that you are not paired with.")
 			break
 		sendAck(node, message["txid"], address)	
 
-		try:
-			listMessage = encodeLISTMessage(message["txid"], node.getPeerRecordsForListMessage())
-
-			# print ("LIST: " + str(listMessage))
-			sent = node.sock.sendto(listMessage.encode("utf-8"), address)
-			node.sock.settimeout(2)
-			node.acks[message["txid"]] = datetime.now()
-			getListEvent.set()		
-		except socket.timeout:
-			print ("error: didnt get ack on list call")
-			getListEvent.set()
-			node.sock.settimeout(None)
-			break		
+		listMessage = encodeLISTMessage(message["txid"], node.getPeerRecordsForListMessage())
+		printDebug ("LIST to: " + str(address))
+		sent = node.sock.sendto(listMessage.encode("utf-8"), address)
+		node.acks[message["txid"]] = datetime.now()
+		getListEvent.set()		
 
 def handleUpdate(node, message, address):
 	db = message["db"]
@@ -390,13 +369,8 @@ def initSocket(node):
 		raise UniqueIdException
 
 def main():
-	# print ("NODE")
-
 	args = parseNodeArgs()
-
 	node = Node(args)
-	# print ("Node:" + str(node))
-
 	rpcFilePath = ""
 	try:
 
@@ -413,8 +387,6 @@ def main():
 	
 		peerCheckThread = threading.Thread(target=checkPeerList, kwargs={"node": node})
 		peerCheckThread.start()
-		printPeerListThread = threading.Thread(target=printPeerList, kwargs={"node": node})
-		printPeerListThread.start()
 		updateThread = threading.Thread(target=sendUpdate, kwargs={"node": node})
 		updateThread.start()
 
@@ -422,56 +394,46 @@ def main():
 		readRpcThread.start()
 
 		while True:
-			try:
-				data, address = node.sock.recvfrom(4096)
-				
-				# print ("ADDRESS: " + str(address))
-				message = decodeMessage(data.decode("utf-8")).getVars()
-				if message["type"] == "hello":
-					handleHello(node, message)
-				elif message["type"] == "getlist":
-					try:
-						getListThread = threading.Thread(target=handleGetList, kwargs={"node": node, "message": message, "address": address})
-						getListThread.start()
-					except InterruptException:
-						print ("InterruptException")
-						getListEvent.set()
-						getListThread.join()
-						raise InterruptException
-					finally:
-						getListEvent.clear()	
-				elif message["type"] == "ack":
-					node.sock.settimeout(None)
-					handleAck(node, message, datetime.now())
-				elif message["type"] == "update":
-					node.sock.settimeout(None)
-					print ("DOSTAL som UPDATE: ")
-					# print (str(message))
-					handleUpdate(node, message, address)
-				elif message["type"] == "disconnect":	
-					print ("DISCONNECT")
-					node.sock.settimeout(None)
-					handleDisconnect(node, message["txid"], address)
-				else:
-					print ("DOSTAL som nieco ine")	
-			except socket.timeout:	
-				print ("error: didnt get ack call")
-				node.sock.settimeout(None)
+			data, address = node.sock.recvfrom(4096)
+			
+			message = decodeMessage(data.decode("utf-8")).getVars()
+			if message["type"] == "hello":
+				handleHello(node, message)
+			elif message["type"] == "getlist":
+				try:
+					getListThread = threading.Thread(target=handleGetList, kwargs={"node": node, "message": message, "address": address})
+					getListThread.start()
+				except InterruptException:
+					print ("InterruptException")
+					getListEvent.set()
+					getListThread.join()
+					raise InterruptException
+				finally:
+					getListEvent.clear()	
+			elif message["type"] == "ack":
+				handleAck(node, message, datetime.now())
+			elif message["type"] == "update":
+				print ("DOSTAL som UPDATE: ")
+				# print (str(message))
+				handleUpdate(node, message, address)
+			elif message["type"] == "disconnect":	
+				print ("DISCONNECT")
+				handleDisconnect(node, message["txid"], address)
+			else:
+				print ("DOSTAL som nieco ine")	
 	except UniqueIdException:
-		print ("UniqueIdException")
+		printCorrectErr ("UniqueIdException")
 	
 	except InterruptException:
 		peerCheckEvent.set()
 		peerCheckThread.join()
-		printPeerListEvent.set()
-		printPeerListThread.join()
 		readRpcEvent.set()
 		readRpcThread.join()
 		connectEvent.set()
 		sendDisconnect(node)
 		disconnectEvent.set()
 		updateEvent.set()
-		print ("InterruptException")
+		printCorrectErr ("InterruptException")
 	finally:
 		print ("closing socket")
 		if os.path.isfile(rpcFilePath):

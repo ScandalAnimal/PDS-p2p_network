@@ -32,6 +32,9 @@ def printErr(message):
 def printCorrectErr(message):
 	print("#STDERR: " + message, file=sys.stderr)
 
+def printDebug(message):
+	print("#DEBUG: " + message, file=sys.stderr)	
+
 def validateIp(s):
     a = s.split('.')
     if len(a) != 4:

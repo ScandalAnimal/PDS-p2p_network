@@ -58,6 +58,8 @@ class Node:
 		print ("|All: ")
 		for k,v in self.db.items():
 			for k1, v1 in v.items():
+				if isinstance(v1, datetime):
+					continue
 				print ("|Username: %10s, IP address: %15s, Port: %8d " % (v1["username"], v1["ipv4"], v1["port"]))
 		print ("-------------------------------------------------------------------")
 	def getPeerRecordsForListMessage(self):
@@ -75,19 +77,14 @@ class Node:
 		return db
 	def saveAuthoritativeRecords(self):
 		items = {}
-		# print ("PEERLIST: " + str(self.peerList))
 		for k,v in self.peerList.items():
 			items[k] = vars(PeerRecordForMessage(v["username"], v["ipv4"], v["port"]))
-			# items[k] = v
-		# print ("PEERLIST: " + str(self.peerList))
 		dbName = str(self.regIp) + "," + str(self.regPort)
 		self.db[dbName] = items
 			
 	def getAllRecordsForUpdateMessage(self):
 		items = {}
 		for k,v in self.db.items():
-			print ("K: " + str(k))
-			print ("V: " + str(v))
 			if "time" in v:
 				for k1, v1 in v.items():
 					if k1 != "time":
@@ -104,7 +101,6 @@ class Node:
 
 def sendUpdate(node):
 	while not updateEvent.is_set():
-
 		try:
 			node.saveAuthoritativeRecords()
 
@@ -112,15 +108,10 @@ def sendUpdate(node):
 				splitted = k.split(",")
 				ip = splitted[0]
 				port = splitted[1]
-				# print ("MESSAGE TO: " + ip + " " + port)
-				# print ("ME: " + str(node.regIp) + " " + str(node.regPort))
 				if (str(ip) == str(node.regIp)) and (str(port) == str(node.regPort)):
-					# print ("SENDING TO MYSELF")
 					continue
-				# print ("AFTER")	
 				txid = getRandomId()
 				message = encodeUPDATEMessage(txid, node.getAllRecordsForUpdateMessage())
-				# print ("message: " + str(node.getAllRecordsForUpdateMessage()))
 				sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
 			updateEvent.wait(4)
 		except InterruptException:
@@ -130,13 +121,10 @@ def sendUpdate(node):
 
 def sendConnect(node, args):
 	while not connectEvent.is_set():
-
 		try:
-			printErr ("sending connect to node: " + str((args[1], args[2])))
+			printDebug ("CONNECT to: " + str(args[1]) + "," + str(args[2]))
 			txid = getRandomId()
-			print (str(node.getAuthoritativeRecordsForUpdateMessage()))
 			message = encodeUPDATEMessage(txid, node.getAuthoritativeRecordsForUpdateMessage())
-			print (str(message))
 			sent = node.sock.sendto(message.encode("utf-8"), (args[1], int(args[2])))
 			connectEvent.set()
 		except InterruptException:
@@ -193,6 +181,8 @@ def handleNeighbors(node):
 	print ("|NEIGHBORS")
 	for k,v in node.neighbors.items():
 		splitted = k.split(",")
+		if str(splitted[0]) == str(node.regIp) and str(splitted[1]) == str(node.regPort):
+			continue
 		print ("|IP address: %15s, Port: %8s " % (splitted[0], splitted[1]))
 	print ("-------------------------------------------------------------------")
 
@@ -235,16 +225,13 @@ def readRpc(file, node):
 			command = f.readline()
 			command = command.replace("\n", "")
 			if command != "" and command != '\n':
-				# print ("command: " + command)
 				handleCommand(command, node)
 			readRpcEvent.wait(1)		
 
 def checkPeerList(node):
 	while not peerCheckEvent.is_set():
 		toDelete = 0
-		# print (str(node.peerList))
 		for k,v in node.peerList.items():
-			# print ("checking: " + str(v))
 			now = datetime.now() - timedelta(seconds=30)
 			if "time" in v:
 				time = v["time"]
@@ -256,7 +243,6 @@ def checkPeerList(node):
 
 		toDelete = 0
 		for k,v in node.db.items():
-			# print ("checking: " + str(v))
 			now = datetime.now() - timedelta(seconds=12)
 			if "time" in v:
 				time = v["time"]
@@ -334,9 +320,7 @@ def handleGetList(node, message, address):
 def handleUpdate(node, message, address):
 	db = message["db"]
 	formattedAddress = str(address[0]) + "," + str(address[1])
-	# print ("formattedAddress: " + str(formattedAddress))
 	for k,v in db.items():
-		print( "K: " + str(k))
 		if k == formattedAddress:
 			v["time"] = datetime.now()
 			node.db[k] = v
@@ -418,8 +402,7 @@ def main():
 			elif message["type"] == "ack":
 				handleAck(node, message, datetime.now())
 			elif message["type"] == "update":
-				print ("DOSTAL som UPDATE: ")
-				# print (str(message))
+				printDebug("UPDATE from: " + str(address[0]) + "," + str(address[1]))
 				handleUpdate(node, message, address)
 			elif message["type"] == "disconnect":	
 				print ("DISCONNECT")

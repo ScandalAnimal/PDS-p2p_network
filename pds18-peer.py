@@ -9,7 +9,7 @@ import os
 from datetime import datetime, timedelta
 from parsers import parsePeerArgs, isCommand
 from protocol import encodeHELLOMessage, encodeGETLISTMessage, encodeACKMessage, encodeMESSAGEMessage, decodeMessage
-from util import InterruptException, UniqueIdException, signalHandler, getRandomId, printErr
+from util import InterruptException, UniqueIdException, signalHandler, getRandomId, printErr, printCorrectErr
 
 helloEvent = threading.Event()
 readRpcEvent = threading.Event()
@@ -19,11 +19,11 @@ messageEvent = threading.Event()
 
 def sendHello(peer, message):
 	while not helloEvent.is_set():
-		# printErr ("sending to address: " + str((peer.regIp, peer.regPort)) + " -> " + str(message))
+		printCorrectErr ("HELLO to: " + str((peer.regIp, peer.regPort)))
 		sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 		helloEvent.wait(10)
 	message = encodeHELLOMessage(getRandomId(), peer.username, "0.0.0.0", 0)
-	# printErr ("hello: " + message)
+	printCorrectErr ("HELLO to: " + str((peer.regIp, peer.regPort)))
 	sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 
 def handleAck(peer, message, time):
@@ -50,7 +50,7 @@ def sendGetList(peer):
 		peer.acks[txid] = datetime.now()
 		peer.currentPhase = 1
 		getListEvent.set()
-		print ("SENT GETLIST")
+		printCorrectErr ("GETLIST to: " + str(peer.nodeAddress))
 
 def sendAck(peer, txid, address):
 	ack = encodeACKMessage(txid)

@@ -27,9 +27,10 @@ def decodeBytes(obj):
 
 # TODO na konci zmazat decorator
 def printErr(message):
-	print ("###########################################")
-	print("#STDERR: " + message + " #", file=sys.stderr)
-	print ("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")    	
+	print("#OLD: " + message, file=sys.stderr)
+
+def printCorrectErr(message):
+	print("#STDERR: " + message, file=sys.stderr)
 
 def validateIp(s):
     a = s.split('.')

@@ -8,7 +8,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs, isCommand
-from util import InterruptException, UniqueIdException, signalHandler, printErr, getRandomId
+from util import InterruptException, UniqueIdException, signalHandler, printErr, getRandomId, printCorrectErr
 from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage, encodeUPDATEMessage, encodeDISCONNECTMessage
 
 peerCheckEvent = threading.Event()
@@ -294,7 +294,7 @@ def handleAck(node, message, time):
 		print ("KLUC neexistuje - to je asi ok, je nam to jedno")
 
 def handleHello(node, message):
-	# print ("DOSTAL SOM HELLO")
+	printCorrectErr ("HELLO from: " + str(message["ipv4"]) + "," + str(message["port"]))
 				
 	duplicity = False
 	toDelete = False
@@ -322,7 +322,7 @@ def sendAck(node, txid, address):
 	sent = node.sock.sendto(ack.encode("utf-8"), address)
 
 def handleGetList(node, message, address):
-	# print ("DOSTAL SOM GETLIST: " + str(message))
+	printCorrectErr ("GETLIST from: " + str(address))
 
 	while not getListEvent.is_set():
 		node.sock.settimeout(2)

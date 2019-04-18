@@ -11,7 +11,6 @@ class UniqueIdException(Exception):
 	pass
 
 def signalHandler(signum, frame):
-	printErr ('Caught signal %d' % signum)
 	raise InterruptException
 
 def getRandomId():
@@ -24,10 +23,6 @@ def decodeBytes(obj):
         return obj.decode("utf-8")
     else:
     	return obj	
-
-# TODO na konci zmazat decorator
-def printErr(message):
-	print("#OLD: " + message, file=sys.stderr)
 
 def printCorrectErr(message):
 	print("#STDERR: " + message, file=sys.stderr)

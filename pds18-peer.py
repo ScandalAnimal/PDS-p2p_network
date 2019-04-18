@@ -8,8 +8,8 @@ import time
 import os
 from datetime import datetime, timedelta
 from parsers import parsePeerArgs, isCommand
-from protocol import encodeHELLOMessage, encodeGETLISTMessage, encodeACKMessage, encodeMESSAGEMessage, decodeMessage
-from util import InterruptException, UniqueIdException, signalHandler, getRandomId, printErr, printCorrectErr, printDebug
+from protocol import encodeHELLOMessage, encodeGETLISTMessage, encodeACKMessage, encodeMESSAGEMessage, decodeMessage, encodeERRORMessage
+from util import InterruptException, UniqueIdException, signalHandler, getRandomId, printCorrectErr, printDebug
 
 helloEvent = threading.Event()
 readRpcEvent = threading.Event()
@@ -43,17 +43,24 @@ def sendGetList(peer):
 
 def sendAck(peer, txid, address):
 	ack = encodeACKMessage(txid)
-	printDebug ("ACK to: " + str(address))
+	printDebug ("ACK: " + str(ack) + ", to: " + str(address[0]) + "," + str(address[1]))
 	sent = peer.sock.sendto(ack.encode("utf-8"), address)
+
+def sendError(node, txid, address, message):
+	err = encodeERRORMessage(txid, message)
+	printDebug ("ERROR: " + str(err) + ", to: " + str(address[0]) + "," + str(address[1]))
+	sent = peer.sock.sendto(err.encode("utf-8"), address)
 
 def sendPeers(peer):
 	sendGetList(peer)
 	peer.currentPhase = 2
 
 def findUserInPeerList(peers, user):
+
 	for k,v in peers.items():
-		if v["username"] == user:
-			return (v["ipv4"], v["port"])
+		for k1,v1 in v.items():
+			if v1["username"] == user:
+				return (v1["ipv4"], v1["port"])
 	return None		
 
 def sendMessage(peer, peerList):
@@ -65,7 +72,6 @@ def sendMessage(peer, peerList):
 			txid = getRandomId()
 			message = encodeMESSAGEMessage(txid, peer.username, to, contents)
 			printDebug ("MESSAGE to: " + str(recipientAddress))
-
 			sent = peer.sock.sendto(message.encode("utf-8"), recipientAddress)
 			peer.acks[txid] = datetime.now()
 			peer.currentPhase = 3
@@ -112,7 +118,7 @@ def handleCommand(command, peer):
 		args = command.split()
 		peer.currentCommandParams = args
 		if peer.username != args[1]:
-			printErr ("ERROR - pokusas sa poslat spravu z ineho peera ako sam od seba")
+			printCorrectErr ("You are trying to send message from different peer than this one")
 		else:
 			try:
 				messageThread = threading.Thread(target=sendPeers, kwargs={"peer": peer})
@@ -159,17 +165,12 @@ class Peer:
 		self.currentCommand = None
 		self.currentCommandParams = []
 		self.currentPhase = None
-	def __str__(self):
-		return ("Id: " + str(self.id) + ", username: " + self.username + 
-			", chatIp: " + self.chatIp + ", chatPort: " + str(self.chatPort) + 
-			", regIp: " + self.regIp + ", regPort: " + str(self.regPort))
-
 def initSocket(peer):
 	peer.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	try:
 		peer.sock.bind((peer.chatIp, peer.chatPort))
 	except OSError:
-		printErr ("Port already in use")
+		printCorrectErr ("Port already in use, try another")
 		raise UniqueIdException
 	peer.nodeAddress = (peer.regIp, peer.regPort)
 
@@ -192,7 +193,6 @@ def main():
 		signal.signal(signal.SIGINT, signalHandler)
 	
 		helloMessage = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
-		# printErr ("hello: " + helloMessage)
 		helloThread = threading.Thread(target=sendHello, kwargs={"peer": peer, "message": helloMessage})
 		helloThread.start()
 
@@ -202,9 +202,12 @@ def main():
 		while True:
 			data, address = peer.sock.recvfrom(4096)
 			
-			message = decodeMessage(data.decode("utf-8")).getVars()
-			print (message)
-			print (str(peer.currentPhase))
+			try:
+				message = decodeMessage(data.decode("utf-8")).getVars()
+			except ValueError:
+				sendError(node, message["txid"], address, "Cannot parse message.")
+				continue
+
 			if message["type"] == 'ack':
 				if peer.currentCommand == "getlist" and peer.currentPhase == 1:
 					printDebug ("ACK for GETLIST")
@@ -214,18 +217,25 @@ def main():
 			elif message["type"] == 'list':
 				if peer.currentCommand == "peers" and peer.currentPhase == 2:
 					printDebug ("LIST from: " + str(address))
+					print ("-------------------------------------------------------------------")
+					print ("|PEERS")
+					for k,v in message["peers"].items():
+						for k1,v1 in v.items():
+							print ("|Username: %10s, IP address: %15s, Port: %8d " % (v1["username"], v1["ipv4"], v1["port"]))
+					print ("-------------------------------------------------------------------")
+
 					sendAck(peer, message["txid"], address)
 				elif peer.currentCommand == "message" and peer.currentPhase == 2:
 					handleMessage(peer, message['peers'])
 			elif message["type"] == 'message':
-				print ("MESSAGE: " + str(message))
 				if message["to"] == peer.username:
-					print ("GOT MESSAGE: " + str(message))
+					printDebug ("MESSAGE from: " + str(address[0]) + "," + str(address[1]) + ": " + message["message"])
 					sendAck(peer, message["txid"], address)
 				else:
-					printErr ("dostal som spravu pre niekoho ineho")	
+					printCorrectErr ("You got message for different recipient")
+					sendError(peer, message["txid"], address, "You sent message to wrong peer.")
 			else:
-				printErr ("DOSTAL som nieco ine")	
+				printCorrectErr ("Unexpected message: " + message)	
 
 	except UniqueIdException:
 		printCorrectErr ("UniqueIdException")
@@ -238,7 +248,6 @@ def main():
 		readRpcThread.join()
 
 	finally:
-		printErr ("closing socket")
 		if os.path.isfile(rpcFilePath):
 			os.remove(rpcFilePath)
 		if peer.sock:

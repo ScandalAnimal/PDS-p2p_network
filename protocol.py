@@ -136,7 +136,6 @@ def encodeERRORMessage(txid, verbose):
 	message = Error(txid, verbose)
 	return (encode(message.toJson()).decode())
 
-# TODO co ak pridu spravne typy sprav ale chybne ine hodnoty? napriklad chybajuce, nebude NPE?
 def decodeMessage(message):
 	decoded = {k.decode("utf-8"):decodeBytes(v) for k,v in decode(message).items()}
 	if (decoded["type"] == "hello"):
@@ -146,7 +145,13 @@ def decodeMessage(message):
 	elif (decoded["type"] == "list"):
 		return List(decoded["txid"], decoded["peers"])
 	elif (decoded["type"] == "message"):
-		return Message(decoded["txid"], decoded["from"], decoded["to"], decoded["message"])
+		mes = ""
+		for v in decoded["message"]:
+			if mes != "":
+				mes = mes + " " + v.decode("utf-8")
+			else:	
+				mes = mes + v.decode("utf-8")
+		return Message(decoded["txid"], decoded["from"], decoded["to"], mes)
 	elif (decoded["type"] == "update"):
 		return Update(decoded["txid"], decoded["db"])
 	elif (decoded["type"] == "disconnect"):

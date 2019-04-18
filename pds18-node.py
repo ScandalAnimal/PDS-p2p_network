@@ -8,7 +8,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs, isCommand
-from util import InterruptException, UniqueIdException, signalHandler, printErr, getRandomId, printCorrectErr, printDebug
+from util import InterruptException, UniqueIdException, signalHandler, getRandomId, printCorrectErr, printDebug
 from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage, encodeUPDATEMessage, encodeDISCONNECTMessage, encodeERRORMessage
 
 peerCheckEvent = threading.Event()
@@ -30,8 +30,6 @@ class PeerRecord:
 		self.ipv4 = ipv4
 		self.port = port
 		self.time = time
-	def getRecordForListMessage(self):
-		return PeerRecordForMessage(self.username, self.ipv4, self.port)
 
 class Node:
 	def __init__(self, args):
@@ -45,9 +43,6 @@ class Node:
 		self.acks = {}
 		self.db = {}
 		self.neighbors = {}
-	def __str__(self):
-		return ("Id: " + str(self.id) + ", regIp: " + self.regIp + ", regPort: " + str(self.regPort) + 
-			", Peer count: " + str(self.peerCount) + ", Peer list: " + str(self.peerList))
 	def printPeerRecords(self):
 		print ("-------------------------------------------------------------------")
 		print ("|DATABASE")
@@ -62,11 +57,6 @@ class Node:
 					continue
 				print ("|Username: %10s, IP address: %15s, Port: %8d " % (v1["username"], v1["ipv4"], v1["port"]))
 		print ("-------------------------------------------------------------------")
-	def getPeerRecordsForListMessage(self):
-		items = {}
-		for k,v in self.peerList.items():
-			items[k] = vars(PeerRecordForMessage(v["username"], v["ipv4"], v["port"]))
-		return items
 	def getAuthoritativeRecordsForUpdateMessage(self):
 		items = {}
 		for k,v in self.peerList.items():
@@ -84,11 +74,14 @@ class Node:
 			
 	def getAllRecordsForUpdateMessage(self):
 		items = {}
+
 		for k,v in self.db.items():
 			if "time" in v:
+				subitems = {}
 				for k1, v1 in v.items():
 					if k1 != "time":
-						items[k] = vars(PeerRecordForMessage(v1["username"], v1["ipv4"], v1["port"]))
+						subitems[k1] = vars(PeerRecordForMessage(v1["username"], v1["ipv4"], v1["port"]))
+				items[k] = subitems		
 			else:
 				items[k] = v
 		return items
@@ -110,6 +103,7 @@ def sendUpdate(node):
 				port = splitted[1]
 				if (str(ip) == str(node.regIp)) and (str(port) == str(node.regPort)):
 					continue
+				printDebug ("UPDATE to: " + str(ip) + "," + str(port))	
 				txid = getRandomId()
 				message = encodeUPDATEMessage(txid, node.getAllRecordsForUpdateMessage())
 				sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
@@ -134,7 +128,6 @@ def sendConnect(node, args):
 
 def sendDisconnect(node):
 	while not disconnectEvent.is_set():
-
 		try:
 			for k,v in node.neighbors.items():
 				splitted = k.split(",")
@@ -142,6 +135,7 @@ def sendDisconnect(node):
 				port = splitted[1]
 				if (str(ip) == str(node.regIp)) and (str(port) == str(node.regPort)):
 					continue
+				printDebug ("DISCONNECT to: " + str(ip) + "," + str(port))
 				txid = getRandomId()
 				message = encodeDISCONNECTMessage(txid)
 				sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
@@ -255,19 +249,14 @@ def checkPeerList(node):
 		peerCheckEvent.wait(5)
 
 def handleAck(node, message, time):
-	# print ("DOSTAL SOM ACK")
 
 	if message["txid"] in node.acks:
-		# print ("KLUC existuje")
 		allowed = time - timedelta(seconds=2)
 		if allowed < node.acks[message["txid"]]:
-			print ("ACK ok")
+			printDebug ("ACK ok")
 		else:
-			print ("ACK not ok - prisiel po limite - ERROR")
+			printDebug ("ACK not ok - after timeout")
 		del node.acks[message["txid"]]	
-
-	else:
-		print ("KLUC neexistuje - to je asi ok, je nam to jedno")
 
 def handleHello(node, message):
 	printDebug ("HELLO from: " + str(message["ipv4"]) + "," + str(message["port"]))
@@ -293,11 +282,12 @@ def handleHello(node, message):
 
 def sendAck(node, txid, address):
 	ack = encodeACKMessage(txid)
-	printDebug ("ACK: " + str(ack) + ", " + str(address))
+	printDebug ("ACK: " + str(ack) + ", to: " + str(address[0]) + "," + str(address[1]))
 	sent = node.sock.sendto(ack.encode("utf-8"), address)
 
 def sendError(node, txid, address, message):
 	err = encodeERRORMessage(txid, message)
+	printDebug ("ERROR: " + str(err) + ", to: " + str(address[0]) + "," + str(address[1]))
 	sent = node.sock.sendto(err.encode("utf-8"), address)
 
 def handleGetList(node, message, address):
@@ -311,7 +301,7 @@ def handleGetList(node, message, address):
 			break
 		sendAck(node, message["txid"], address)	
 
-		listMessage = encodeLISTMessage(message["txid"], node.getPeerRecordsForListMessage())
+		listMessage = encodeLISTMessage(message["txid"], node.getAllRecordsForUpdateMessage())
 		printDebug ("LIST to: " + str(address))
 		sent = node.sock.sendto(listMessage.encode("utf-8"), address)
 		node.acks[message["txid"]] = datetime.now()
@@ -330,7 +320,6 @@ def handleDisconnect(node, txid, address):
 	disconnectIp = address[0]
 	disconnectPort = address[1]
 	disconnectAddress = str(disconnectIp) + "," + str(disconnectPort)
-	print ("DISC ADDRESS: " + str(disconnectAddress))
 	sendAck(node, txid, address)
 	toDelete = 0
 	for k,v in node.db.items():
@@ -350,11 +339,10 @@ def handleDisconnect(node, txid, address):
 def initSocket(node):
 	node.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	node.address = (node.regIp, node.regPort)
-	# print ("starting up on %s port %s" % node.address)
 	try:
 		node.sock.bind(node.address)
 	except OSError:
-		printErr ("Port already in use")
+		printCorrectErr ("Port already in use, try another")
 		raise UniqueIdException
 
 def main():
@@ -385,7 +373,12 @@ def main():
 		while True:
 			data, address = node.sock.recvfrom(4096)
 			
-			message = decodeMessage(data.decode("utf-8")).getVars()
+			try:
+				message = decodeMessage(data.decode("utf-8")).getVars()
+			except ValueError:
+				sendError(node, message["txid"], address, "Cannot parse message.")
+				continue
+
 			if message["type"] == "hello":
 				handleHello(node, message)
 			elif message["type"] == "getlist":
@@ -405,10 +398,10 @@ def main():
 				printDebug("UPDATE from: " + str(address[0]) + "," + str(address[1]))
 				handleUpdate(node, message, address)
 			elif message["type"] == "disconnect":	
-				print ("DISCONNECT")
+				printDebug ("DISCONNECT from: " + str(address[0]) + "," + str(address[1]))
 				handleDisconnect(node, message["txid"], address)
 			else:
-				print ("DOSTAL som nieco ine")	
+				printCorrectErr ("Unexpected message: " + message)	
 	except UniqueIdException:
 		printCorrectErr ("UniqueIdException")
 	
@@ -423,7 +416,6 @@ def main():
 		updateEvent.set()
 		printCorrectErr ("InterruptException")
 	finally:
-		print ("closing socket")
 		if os.path.isfile(rpcFilePath):
 			os.remove(rpcFilePath)
 		if node.sock:

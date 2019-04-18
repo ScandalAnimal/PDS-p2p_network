@@ -157,5 +157,3 @@ def decodeMessage(message):
 		return Error(decoded["txid"], decoded["verbose"])
 	else:
 		raise ValueError("Allowed types are hello, getlist, list, message, update, disconnect, ack, error; not %s", decoded["type"])
-
-# DB_RECORD := {"<dotted_decimal_IP>,<ushort_port>":{<PEER_RECORD*>}}

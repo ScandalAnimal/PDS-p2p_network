@@ -383,7 +383,11 @@ def initSocket(node):
 	node.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	node.address = (node.regIp, node.regPort)
 	# print ("starting up on %s port %s" % node.address)
-	node.sock.bind(node.address)
+	try:
+		node.sock.bind(node.address)
+	except OSError:
+		printErr ("Port already in use")
+		raise UniqueIdException
 
 def main():
 	# print ("NODE")

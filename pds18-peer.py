@@ -213,7 +213,11 @@ class Peer:
 def initSocket(peer):
 	peer.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	peer.sock.settimeout(2)
-	peer.sock.bind((peer.chatIp, peer.chatPort))
+	try:
+		peer.sock.bind((peer.chatIp, peer.chatPort))
+	except OSError:
+		printErr ("Port already in use")
+		raise UniqueIdException
 	peer.nodeAddress = (peer.regIp, peer.regPort)
 
 def main():

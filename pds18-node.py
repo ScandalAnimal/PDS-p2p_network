@@ -189,7 +189,12 @@ def handleSync(node):
 		raise InterruptException
 
 def handleNeighbors(node):
-	print ("NEIGHBORS: " + str(node.neighbors))
+	print ("-------------------------------------------------------------------")
+	print ("|NEIGHBORS")
+	for k,v in node.neighbors.items():
+		splitted = k.split(",")
+		print ("|IP address: %15s, Port: %8s " % (splitted[0], splitted[1]))
+	print ("-------------------------------------------------------------------")
 
 def handleCommand(command, node):
 	if isCommand("database", command):

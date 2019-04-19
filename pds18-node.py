@@ -43,59 +43,62 @@ class Node:
 		self.acks = {}
 		self.db = {}
 		self.neighbors = {}
-	def printPeerRecords(self):
-		print ("-------------------------------------------------------------------")
-		print ("|DATABASE")
-		print ("|Authoritative: ")
-		for k,v in self.peerList.items():
-			print ("|Username: %10s, IP address: %15s, Port: %8d " % (v["username"], v["ipv4"], v["port"]))
-		print ("|")	
-		print ("|All: ")
-		for k,v in self.db.items():
+
+def printPeerRecords(node):
+	print ("-------------------------------------------------------------------")
+	print ("|DATABASE")
+	print ("|Authoritative: ")
+	for k,v in node.peerList.items():
+		print ("|Username: %10s, IP address: %15s, Port: %8d " % (v["username"], v["ipv4"], v["port"]))
+	print ("|")	
+	print ("|All: ")
+	for k,v in node.db.items():
+		for k1, v1 in v.items():
+			if isinstance(v1, datetime):
+				continue
+			print ("|Username: %10s, IP address: %15s, Port: %8d " % (v1["username"], v1["ipv4"], v1["port"]))
+	print ("-------------------------------------------------------------------")
+
+def getAuthoritativeRecordsForUpdateMessage(node):
+	items = {}
+	for k,v in node.peerList.items():
+		items[k] = vars(PeerRecordForMessage(v["username"], v["ipv4"], v["port"]))
+	dbName = str(node.regIp) + "," + str(node.regPort)
+	node.db[dbName] = items
+	db = {str(dbName):items}
+	return db
+
+def saveAuthoritativeRecords(node):
+	items = {}
+	for k,v in node.peerList.items():
+		items[k] = vars(PeerRecordForMessage(v["username"], v["ipv4"], v["port"]))
+	dbName = str(node.regIp) + "," + str(node.regPort)
+	node.db[dbName] = items
+
+def getAllRecordsForUpdateMessage(node):
+	items = {}
+
+	for k,v in node.db.items():
+		if "time" in v:
+			subitems = {}
 			for k1, v1 in v.items():
-				if isinstance(v1, datetime):
-					continue
-				print ("|Username: %10s, IP address: %15s, Port: %8d " % (v1["username"], v1["ipv4"], v1["port"]))
-		print ("-------------------------------------------------------------------")
-	def getAuthoritativeRecordsForUpdateMessage(self):
-		items = {}
-		for k,v in self.peerList.items():
-			items[k] = vars(PeerRecordForMessage(v["username"], v["ipv4"], v["port"]))
-		dbName = str(self.regIp) + "," + str(self.regPort)
-		self.db[dbName] = items
-		db = {str(dbName):items}
-		return db
-	def saveAuthoritativeRecords(self):
-		items = {}
-		for k,v in self.peerList.items():
-			items[k] = vars(PeerRecordForMessage(v["username"], v["ipv4"], v["port"]))
-		dbName = str(self.regIp) + "," + str(self.regPort)
-		self.db[dbName] = items
-			
-	def getAllRecordsForUpdateMessage(self):
-		items = {}
+				if k1 != "time":
+					subitems[k1] = vars(PeerRecordForMessage(v1["username"], v1["ipv4"], v1["port"]))
+			items[k] = subitems		
+		else:
+			items[k] = v
+	return items
 
-		for k,v in self.db.items():
-			if "time" in v:
-				subitems = {}
-				for k1, v1 in v.items():
-					if k1 != "time":
-						subitems[k1] = vars(PeerRecordForMessage(v1["username"], v1["ipv4"], v1["port"]))
-				items[k] = subitems		
-			else:
-				items[k] = v
-		return items
-
-	def isPeer(self, address):
-		for k,v in self.peerList.items():
-			if v["ipv4"] == address[0] and v["port"] == address[1]:
-				return True
-		return False		
+def isPeer(node, address):
+	for k,v in node.peerList.items():
+		if v["ipv4"] == address[0] and v["port"] == address[1]:
+			return True
+	return False		
 
 def sendUpdate(node):
 	while not updateEvent.is_set():
 		try:
-			node.saveAuthoritativeRecords()
+			saveAuthoritativeRecords(node)
 
 			for k,v in node.neighbors.items():
 				splitted = k.split(",")
@@ -105,7 +108,7 @@ def sendUpdate(node):
 					continue
 				printDebug ("UPDATE to: " + str(ip) + "," + str(port))	
 				txid = getRandomId()
-				message = encodeUPDATEMessage(txid, node.getAllRecordsForUpdateMessage())
+				message = encodeUPDATEMessage(txid, getAllRecordsForUpdateMessage(node))
 				sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
 			updateEvent.wait(4)
 		except InterruptException:
@@ -118,7 +121,7 @@ def sendConnect(node, args):
 		try:
 			printDebug ("CONNECT to: " + str(args[1]) + "," + str(args[2]))
 			txid = getRandomId()
-			message = encodeUPDATEMessage(txid, node.getAuthoritativeRecordsForUpdateMessage())
+			message = encodeUPDATEMessage(txid, getAuthoritativeRecordsForUpdateMessage(node))
 			sent = node.sock.sendto(message.encode("utf-8"), (args[1], int(args[2])))
 			connectEvent.set()
 		except InterruptException:
@@ -143,7 +146,7 @@ def sendDisconnect(node):
 
 			node.db.clear()
 			node.neighbors.clear()
-			node.saveAuthoritativeRecords()
+			saveAuthoritativeRecords(node)
 
 			disconnectEvent.set()
 
@@ -155,7 +158,7 @@ def sendDisconnect(node):
 def handleSync(node):
 
 	try:
-		node.saveAuthoritativeRecords()
+		saveAuthoritativeRecords(node)
 
 		for k,v in node.neighbors.items():
 			splitted = k.split(",")
@@ -164,7 +167,7 @@ def handleSync(node):
 			if (str(ip) == str(node.regIp)) and (str(port) == str(node.regPort)):
 				continue
 			txid = getRandomId()
-			message = encodeUPDATEMessage(txid, node.getAllRecordsForUpdateMessage())
+			message = encodeUPDATEMessage(txid, getAllRecordsForUpdateMessage(node))
 			sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
 	except InterruptException:
 		printCorrectErr ("InterruptException in handleSync")
@@ -182,7 +185,7 @@ def handleNeighbors(node):
 
 def handleCommand(command, node):
 	if isCommand("database", command):
-		node.printPeerRecords()
+		printPeerRecords(node)
 	elif isCommand("connect", command):
 		node.currentCommand = "connect"
 		try:
@@ -294,14 +297,14 @@ def handleGetList(node, message, address):
 	printDebug ("GETLIST from: " + str(address))
 
 	while not getListEvent.is_set():
-		if not node.isPeer(address):
+		if not isPeer(node, address):
 			printCorrectErr ("GETLIST is from foreign peer, killing it")
 			getListEvent.set()
 			sendError(node, message["txid"], address, "You tried to get peer list from node that you are not paired with.")
 			break
 		sendAck(node, message["txid"], address)	
 
-		listMessage = encodeLISTMessage(message["txid"], node.getAllRecordsForUpdateMessage())
+		listMessage = encodeLISTMessage(message["txid"], getAllRecordsForUpdateMessage(node))
 		printDebug ("LIST to: " + str(address))
 		sent = node.sock.sendto(listMessage.encode("utf-8"), address)
 		node.acks[message["txid"]] = datetime.now()

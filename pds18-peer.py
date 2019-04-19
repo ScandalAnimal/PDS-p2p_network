@@ -66,12 +66,13 @@ def findUserInPeerList(peers, user):
 def sendMessage(peer, peerList):
 	while not messageEvent.is_set():
 		to = peer.currentCommandParams[2]
-		contents = peer.currentCommandParams[3:]
+		contents = peer.currentCommandParams[3]
+		print (contents)
 		recipientAddress = findUserInPeerList(peerList, to)
 		if recipientAddress:
 			txid = getRandomId()
 			message = encodeMESSAGEMessage(txid, peer.username, to, contents)
-			printDebug ("MESSAGE to: " + str(recipientAddress))
+			printDebug ("MESSAGE to: " + str(recipientAddress) + ": " + message)
 			sent = peer.sock.sendto(message.encode("utf-8"), recipientAddress)
 			peer.acks[txid] = datetime.now()
 			peer.currentPhase = 3
@@ -115,7 +116,7 @@ def handleCommand(command, peer):
 		sendPeers(peer)
 	elif isCommand("message", command):
 		peer.currentCommand = "message"
-		args = command.split()
+		args = command.split(' ', 3)
 		peer.currentCommandParams = args
 		if peer.username != args[1]:
 			printCorrectErr ("You are trying to send message from different peer than this one")
@@ -235,7 +236,7 @@ def main():
 					printCorrectErr ("You got message for different recipient")
 					sendError(peer, message["txid"], address, "You sent message to wrong peer.")
 			else:
-				printCorrectErr ("Unexpected message: " + message)	
+				printCorrectErr ("Unexpected message: " + str(message))	
 
 	except UniqueIdException:
 		printCorrectErr ("UniqueIdException")

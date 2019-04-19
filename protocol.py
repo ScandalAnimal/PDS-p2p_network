@@ -147,10 +147,10 @@ def decodeMessage(message):
 	elif (decoded["type"] == "message"):
 		mes = ""
 		for v in decoded["message"]:
-			if mes != "":
-				mes = mes + " " + v.decode("utf-8")
-			else:	
+			if isinstance(v, bytes):
 				mes = mes + v.decode("utf-8")
+			else:
+				mes = mes + v	
 		return Message(decoded["txid"], decoded["from"], decoded["to"], mes)
 	elif (decoded["type"] == "update"):
 		return Update(decoded["txid"], decoded["db"])

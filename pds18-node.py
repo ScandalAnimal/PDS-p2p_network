@@ -246,7 +246,7 @@ def checkPeerList(node):
 		if toDelete != 0:
 			del node.db[toDelete]
 
-		peerCheckEvent.wait(5)
+		peerCheckEvent.wait(1)
 
 def handleAck(node, message, time):
 
@@ -401,7 +401,7 @@ def main():
 				printDebug ("DISCONNECT from: " + str(address[0]) + "," + str(address[1]))
 				handleDisconnect(node, message["txid"], address)
 			else:
-				printCorrectErr ("Unexpected message: " + message)	
+				printCorrectErr ("Unexpected message: " + str(message))	
 	except UniqueIdException:
 		printCorrectErr ("UniqueIdException")
 	

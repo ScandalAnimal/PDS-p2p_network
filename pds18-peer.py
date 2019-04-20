@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import socket
 import signal
@@ -105,6 +105,7 @@ def handleReconnect(peer, args):
 	nodeAddress = (peer.regIp, peer.regPort)
 	message = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
 	sent = peer.sock.sendto(message.encode("utf-8"), nodeAddress)
+	print ("RPC Reconnect finished.")
 
 def handleCommand(command, peer):
 	printDebug ("RPC command: " + str(command))
@@ -131,6 +132,8 @@ def handleCommand(command, peer):
 				raise InterruptException
 			finally:
 				messageEvent.clear()
+				print ("RPC Message finished.")
+
 	elif isCommand("reconnect", command):
 		args = command.split()
 		handleReconnect(peer, args)
@@ -213,6 +216,7 @@ def main():
 				if peer.currentCommand == "getlist" and peer.currentPhase == 1:
 					printDebug ("ACK for GETLIST")
 					handleAck(peer, message, datetime.now())
+					print ("RPC Getlist finished.")
 				elif peer.currentCommand == "message" and peer.currentPhase == 3:
 					handleAck(peer, message, datetime.now())	
 			elif message["type"] == 'list':
@@ -226,6 +230,7 @@ def main():
 					print ("-------------------------------------------------------------------")
 
 					sendAck(peer, message["txid"], address)
+					print ("RPC Peers finished.")
 				elif peer.currentCommand == "message" and peer.currentPhase == 2:
 					handleMessage(peer, message['peers'])
 			elif message["type"] == 'message':

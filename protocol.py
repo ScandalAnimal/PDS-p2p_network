@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 from bencoder import encode, decode
 from util import decodeBytes

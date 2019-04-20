@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import socket
 import sys
@@ -172,6 +172,8 @@ def handleSync(node):
 	except InterruptException:
 		printCorrectErr ("InterruptException in handleSync")
 		raise InterruptException
+	finally:
+		print ("RPC Sync finished.")
 
 def handleNeighbors(node):
 	print ("-------------------------------------------------------------------")
@@ -182,10 +184,14 @@ def handleNeighbors(node):
 			continue
 		print ("|IP address: %15s, Port: %8s " % (splitted[0], splitted[1]))
 	print ("-------------------------------------------------------------------")
+	print ("RPC Neighbors finished.")
+
 
 def handleCommand(command, node):
 	if isCommand("database", command):
 		printPeerRecords(node)
+		print ("RPC Database finished.")
+
 	elif isCommand("connect", command):
 		node.currentCommand = "connect"
 		try:
@@ -199,6 +205,8 @@ def handleCommand(command, node):
 			raise InterruptException
 		finally:
 			connectEvent.clear()
+			print ("RPC Connect finished.")
+
 	elif isCommand("neighbors", command):
 		handleNeighbors(node)
 	elif isCommand("sync", command):
@@ -215,6 +223,7 @@ def handleCommand(command, node):
 			raise InterruptException
 		finally:
 			disconnectEvent.clear()
+			print ("RPC Disconnect finished.")
 
 def readRpc(file, node):
 	with open(file, 'r') as f:

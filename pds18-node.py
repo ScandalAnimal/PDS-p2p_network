@@ -8,7 +8,7 @@ import os
 import time
 from datetime import datetime, timedelta
 from parsers import parseNodeArgs, isCommand
-from util import InterruptException, UniqueIdException, signalHandler, getRandomId, printCorrectErr, printDebug
+from util import InterruptException, UniqueIdException, signalHandler, getRandomId, printCorrectErr, printDebug, AckRecord
 from protocol import decodeMessage, encodeLISTMessage, encodeACKMessage, encodeUPDATEMessage, encodeDISCONNECTMessage, encodeERRORMessage
 
 peerCheckEvent = threading.Event()
@@ -17,6 +17,7 @@ getListEvent = threading.Event()
 connectEvent = threading.Event()
 updateEvent = threading.Event()
 disconnectEvent = threading.Event()
+checkAcksEvent = threading.Event()
 
 class PeerRecordForMessage:
 	def __init__(self, username, ipv4, port):
@@ -43,6 +44,7 @@ class Node:
 		self.acks = {}
 		self.db = {}
 		self.neighbors = {}
+		self.toRemove = []
 
 def printPeerRecords(node):
 	print ("-------------------------------------------------------------------")
@@ -142,7 +144,7 @@ def sendDisconnect(node):
 				txid = getRandomId()
 				message = encodeDISCONNECTMessage(txid)
 				sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
-				node.acks[txid] = datetime.now()
+				node.acks[txid] = AckRecord(datetime.now(), str(ip), str(port), "disconnect")
 
 			node.db.clear()
 			node.neighbors.clear()
@@ -262,13 +264,18 @@ def checkPeerList(node):
 
 def handleAck(node, message, time):
 
-	if message["txid"] in node.acks:
-		allowed = time - timedelta(seconds=2)
-		if allowed < node.acks[message["txid"]]:
-			printDebug ("ACK ok")
-		else:
-			printDebug ("ACK not ok - after timeout")
-		del node.acks[message["txid"]]	
+	exists = False
+	for k,v in node.acks.items():
+		if str(message["txid"]) == str(k):
+			exists = True
+			allowed = time - timedelta(seconds=2)
+			if allowed < v.time:
+				printDebug ("ACK ok")
+			else:
+				printDebug ("ACK not ok - after timeout")
+	if exists:
+		node.acks[message["txid"]] = AckRecord(time, v.ip, v.port, v.type)
+		node.toRemove.append(message["txid"])
 
 def handleHello(node, message):
 	printDebug ("HELLO from: " + str(message["ipv4"]) + "," + str(message["port"]))
@@ -316,7 +323,7 @@ def handleGetList(node, message, address):
 		listMessage = encodeLISTMessage(message["txid"], getAllRecordsForUpdateMessage(node))
 		printDebug ("LIST to: " + str(address))
 		sent = node.sock.sendto(listMessage.encode("utf-8"), address)
-		node.acks[message["txid"]] = datetime.now()
+		node.acks[message["txid"]] = AckRecord(datetime.now(), str(address[0]), str(address[1]), "list")
 		getListEvent.set()		
 
 def handleUpdate(node, message, address):
@@ -357,6 +364,24 @@ def initSocket(node):
 		printCorrectErr ("Port already in use, try another")
 		raise UniqueIdException
 
+def checkAcks(node):
+	while not checkAcksEvent.is_set():
+		
+		for k in node.toRemove:
+			del node.acks[k]
+		node.toRemove = []	
+		toDelete = 0
+		for k,v in node.acks.items():
+			now = datetime.now() - timedelta(seconds=2)			
+			time = v.time
+			if now > time:
+				toDelete = k
+				break
+		if toDelete != 0:
+			print ("Failed to get ACK for: " + node.acks[toDelete].type + " from: " + node.acks[toDelete].ip + ":" + node.acks[toDelete].port)
+			del node.acks[toDelete]
+		checkAcksEvent.wait(0.5)
+
 def main():
 	args = parseNodeArgs()
 	node = Node(args)
@@ -381,6 +406,9 @@ def main():
 
 		readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName, "node": node})
 		readRpcThread.start()
+
+		checkAcksThread = threading.Thread(target=checkAcks, kwargs={"node": node})
+		checkAcksThread.start()
 
 		while True:
 			data, address = node.sock.recvfrom(4096)
@@ -422,6 +450,8 @@ def main():
 		peerCheckThread.join()
 		readRpcEvent.set()
 		readRpcThread.join()
+		checkAcksEvent.set()
+		checkAcksThread.join()
 		connectEvent.set()
 		sendDisconnect(node)
 		disconnectEvent.set()

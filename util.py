@@ -4,6 +4,15 @@ import sys
 import uuid
 import random
 
+class AckRecord:
+	def __init__(self, time, ip, port, messageType):
+		self.time = time
+		self.ip = ip
+		self.port = port
+		self.type = messageType
+	def __str__(self):
+		return ("TIME: " + str(self.time) + ", IP: " + str(self.ip) + ", PORT: " + str(self.port) + ", TYPE: " + str(self.type))	
+
 class InterruptException(Exception):
 	pass
 

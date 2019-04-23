@@ -9,11 +9,12 @@ import os
 from datetime import datetime, timedelta
 from parsers import parsePeerArgs, isCommand
 from protocol import encodeHELLOMessage, encodeGETLISTMessage, encodeACKMessage, encodeMESSAGEMessage, decodeMessage, encodeERRORMessage
-from util import InterruptException, UniqueIdException, signalHandler, getRandomId, printCorrectErr, printDebug
+from util import InterruptException, UniqueIdException, signalHandler, getRandomId, printCorrectErr, printDebug, AckRecord
 
 helloEvent = threading.Event()
 readRpcEvent = threading.Event()
 messageEvent = threading.Event()
+checkAcksEvent = threading.Event()
 
 def sendHello(peer, message):
 	while not helloEvent.is_set():
@@ -25,19 +26,24 @@ def sendHello(peer, message):
 	sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 
 def handleAck(peer, message, time):
-	if message["txid"] in peer.acks:
-		allowed = time - timedelta(seconds=2)
-		if allowed < peer.acks[message["txid"]]:
-			printDebug ("ACK ok")
-		else:
-			printDebug ("ACK not ok")
-		del peer.acks[message["txid"]]
+	exists = False
+	for k,v in peer.acks.items():
+		if str(message["txid"]) == str(k):
+			exists = True
+			allowed = time - timedelta(seconds=2)
+			if allowed < v.time:
+				printDebug ("ACK ok")
+			else:
+				printDebug ("ACK not ok")
+	if exists:
+		peer.acks[message["txid"]] = AckRecord(time, v.ip, v.port, v.type)
+		peer.toRemove.append(message["txid"])
 
 def sendGetList(peer):
 	txid = getRandomId()
 	message = encodeGETLISTMessage(txid)
 	sent = peer.sock.sendto(message.encode("utf-8"), peer.nodeAddress)
-	peer.acks[txid] = datetime.now()
+	peer.acks[txid] = AckRecord(datetime.now(), str(peer.nodeAddress[0]), str(peer.nodeAddress[1]), "getlist")
 	peer.currentPhase = 1
 	printDebug ("GETLIST to: " + str(peer.nodeAddress))
 
@@ -74,7 +80,7 @@ def sendMessage(peer, peerList):
 			message = encodeMESSAGEMessage(txid, peer.username, to, contents)
 			printDebug ("MESSAGE to: " + str(recipientAddress) + ": " + message)
 			sent = peer.sock.sendto(message.encode("utf-8"), recipientAddress)
-			peer.acks[txid] = datetime.now()
+			peer.acks[txid] = AckRecord(datetime.now(), str(recipientAddress[0]), str(recipientAddress[1]), "message")
 			peer.currentPhase = 3
 		else:
 			printCorrectErr ("Trying to send message to nonexistent peer")	
@@ -169,6 +175,7 @@ class Peer:
 		self.currentCommand = None
 		self.currentCommandParams = []
 		self.currentPhase = None
+		self.toRemove = []
 def initSocket(peer):
 	peer.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	try:
@@ -177,6 +184,24 @@ def initSocket(peer):
 		printCorrectErr ("Port already in use, try another")
 		raise UniqueIdException
 	peer.nodeAddress = (peer.regIp, peer.regPort)
+
+def checkAcks(peer):
+	while not checkAcksEvent.is_set():
+		
+		for k in peer.toRemove:
+			del peer.acks[k]
+		peer.toRemove = []	
+		toDelete = 0
+		for k,v in peer.acks.items():
+			now = datetime.now() - timedelta(seconds=2)			
+			time = v.time
+			if now > time:
+				toDelete = k
+				break
+		if toDelete != 0:
+			print ("Failed to get ACK for: " + peer.acks[toDelete].type + " from: " + peer.acks[toDelete].ip + ":" + peer.acks[toDelete].port)
+			del peer.acks[toDelete]
+		checkAcksEvent.wait(0.5)	
 
 def main():
 
@@ -203,6 +228,9 @@ def main():
 		readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName, "peer": peer})
 		readRpcThread.start()
 
+		checkAcksThread = threading.Thread(target=checkAcks, kwargs={"peer": peer})
+		checkAcksThread.start()
+
 		while True:
 			data, address = peer.sock.recvfrom(4096)
 			
@@ -217,8 +245,11 @@ def main():
 					printDebug ("ACK for GETLIST")
 					handleAck(peer, message, datetime.now())
 					print ("RPC Getlist finished.")
+				elif peer.currentCommand == "peers" and peer.currentPhase == 2:
+					printDebug ("ACK for GETLIST")
+					handleAck(peer, message, datetime.now())
 				elif peer.currentCommand == "message" and peer.currentPhase == 3:
-					handleAck(peer, message, datetime.now())	
+					handleAck(peer, message, datetime.now())
 			elif message["type"] == 'list':
 				if peer.currentCommand == "peers" and peer.currentPhase == 2:
 					printDebug ("LIST from: " + str(address))
@@ -252,6 +283,8 @@ def main():
 		helloThread.join()
 		readRpcEvent.set()
 		readRpcThread.join()
+		checkAcksEvent.set()
+		checkAcksThread.join()
 
 	finally:
 		if os.path.isfile(rpcFilePath):

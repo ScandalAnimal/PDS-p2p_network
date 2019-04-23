@@ -203,6 +203,10 @@ def checkAcks(peer):
 			del peer.acks[toDelete]
 		checkAcksEvent.wait(0.5)	
 
+def handleError(peer, message, address):
+	resetPeerState(peer)
+	printCorrectErr ("ERROR from: " + str(address) + ": " + str(message["verbose"]))
+
 def main():
 
 	args = parsePeerArgs()
@@ -271,6 +275,8 @@ def main():
 				else:
 					printCorrectErr ("You got message for different recipient")
 					sendError(peer, message["txid"], address, "You sent message to wrong peer.")
+			elif message["type"] == 'error':
+				handleError(peer, message, address)
 			else:
 				printCorrectErr ("Unexpected message: " + str(message))	
 

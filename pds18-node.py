@@ -382,6 +382,9 @@ def checkAcks(node):
 			del node.acks[toDelete]
 		checkAcksEvent.wait(0.5)
 
+def handleError(node, message, address):
+	printCorrectErr ("ERROR from: " + str(address) + ": " + str(message["verbose"]))
+
 def main():
 	args = parseNodeArgs()
 	node = Node(args)
@@ -440,6 +443,8 @@ def main():
 			elif message["type"] == "disconnect":	
 				printDebug ("DISCONNECT from: " + str(address[0]) + "," + str(address[1]))
 				handleDisconnect(node, message["txid"], address)
+			elif message["type"] == "error":
+				handleError(node, message, address)
 			else:
 				printCorrectErr ("Unexpected message: " + str(message))	
 	except UniqueIdException:

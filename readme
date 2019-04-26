@@ -1,0 +1,12 @@
+PDS projekt 2019 - Hybridná chatovacia p2p sieť
+
+Autor: Maroš Vasilišin, xvasil02
+
+Implementované časti:
+- pds18-peer
+- pds18-node
+- pds18-rpc
+- všetky príkazy zo zadania boli implementované
+
+Pre spustenie projektu je potrebné zadať príkaz "make", 
+ktorý vytvorí spustiteľné súbory pds18-peer, pds18-node, pds18-rpc.

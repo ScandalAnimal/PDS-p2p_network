@@ -8,7 +8,7 @@ def peerUsage(name=None):
 
 def parsePeerArgs():
 	parser = argparse.ArgumentParser(usage=peerUsage(),allow_abbrev=False)
-	parser.add_argument("--id", type=int, required=True, help="Unique peer identificator", metavar="id")
+	parser.add_argument("--id", type=str, required=True, help="Unique peer identificator", metavar="id")
 	parser.add_argument("--username", type=str, required=True, help="Peer username", metavar="username")
 	parser.add_argument("--chat-ipv4", type=str, required=True, help="Address where peer is listening", metavar="chat-ipv4")
 	parser.add_argument("--chat-port", type=int, required=True, help="Port where peer is listening", metavar="chat-port")
@@ -24,7 +24,7 @@ def nodeUsage(name=None):
 
 def parseNodeArgs():
 	parser = argparse.ArgumentParser(usage=nodeUsage(),allow_abbrev=False)
-	parser.add_argument("--id", type=int, required=True, help="Unique node identificator", metavar="id")
+	parser.add_argument("--id", type=str, required=True, help="Unique node identificator", metavar="id")
 	parser.add_argument("--reg-ipv4", type=str, required=True, help="Address of reg node", metavar="reg-ipv4")
 	parser.add_argument("--reg-port", type=int, required=True, help="Port of reg node", metavar="reg-port")
 	args = parser.parse_args()
@@ -50,7 +50,7 @@ def rpcUsage(name=None):
 
 def parseRpcArgs():
 	parser = argparse.ArgumentParser(usage=rpcUsage(),allow_abbrev=False)
-	parser.add_argument("--id", type=int, required=True, help="Unique node/peer identificator", metavar="id")
+	parser.add_argument("--id", type=str, required=True, help="Unique node/peer identificator", metavar="id")
 	pngroup = parser.add_mutually_exclusive_group(required=True)
 	pngroup.add_argument('--peer', help="Target is peer", action='store_true', dest='peer')
 	pngroup.add_argument('--node', help="Target is node", action='store_true', dest='node')

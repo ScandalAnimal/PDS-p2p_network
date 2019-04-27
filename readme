@@ -6,7 +6,52 @@ Implementované časti:
 - pds18-peer
 - pds18-node
 - pds18-rpc
-- všetky príkazy zo zadania boli implementované
+
+Bonusová úloha - nie je implementovaná
 
 Pre spustenie projektu je potrebné zadať príkaz "make", 
 ktorý vytvorí spustiteľné súbory pds18-peer, pds18-node, pds18-rpc.
+
+Použitie aplikácie:
+	
+	./pds18-peer --id <identifikator> --username <username> --chat-ipv4 <ip> --chat-port <port> --reg-ipv4 <IP> --reg-port <port>
+
+	./pds18-node --id <identifikator> --reg-ipv4 <ip> --reg-port <port>
+
+	./pds18-rpc --id <identifikator> <--peer|--node> --command <prikaz> <parametre>
+
+	Identifikátor a username musia byť unikátne reťazce.
+	IP musí byť validná ipv4 adresa vo formáte ***.***.***.***
+	Port musí byť číslo väčšie než 0.
+
+	Príkazy môžu byť nasledujúce:
+
+		--peer --command message --from <username1> --to <username2> --message <zpráva>, odošle chat správu
+		--peer --command getlist, odošle správu GETLIST a nechá si ju potvrdiť
+		--peer --command peers, zobrazí zoznam peerov v sieti
+		--peer --command reconnect --reg-ipv4 <IP> --reg-port <port>, odpojí sa od súčasného uzlu a pripojí sa na iný
+		--node --command database, zobrazí databázu peerov a ich adresy a porty
+		--node --command neighbors, zobrazí zoznam susedných uzlov
+		--node --command connect --reg-ipv4 <IP> --reg-port <port>, pokusí sa pripojiť k inému uzlu
+		--node --command disconnect, zruší spojenie so svojimi susedmi
+		--node --command sync, vynúti si synchronizáciu databázy so susedmi
+
+
+Okrem použitia RPC je možné príkazy zadať priamo do dočasných súborov, vytvorených bežiacimi uzlami a peermi.
+Príkazy sa zavolajú po uložení súboru.
+Formát vložených správ je nasledujúci (kopíruje rpc príkazy)		
+
+	message <username1> <username2> <správa>
+	getlist
+	peers
+	reconnect <IP> <port>
+	database
+	neighbors
+	connect <IP> <port>
+	disconnect
+	sync
+
+
+
+
+

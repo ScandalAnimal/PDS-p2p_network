@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-
 import socket
 import signal
 import sys

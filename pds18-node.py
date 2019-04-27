@@ -70,6 +70,15 @@ def getAuthoritativeRecordsForUpdateMessage(node):
 	db = {str(dbName):items}
 	return db
 
+def getAllRecordsForListMessage(node):
+	items = {}
+	for k,v in node.db.items():
+		for k1, v1 in v.items():
+			if k1 != "time":
+				items[k1] = vars(PeerRecordForMessage(v1["username"], v1["ipv4"], v1["port"]))
+	return items
+
+
 def saveAuthoritativeRecords(node):
 	items = {}
 	for k,v in node.peerList.items():
@@ -320,7 +329,8 @@ def handleGetList(node, message, address):
 			break
 		sendAck(node, message["txid"], address)	
 
-		listMessage = encodeLISTMessage(message["txid"], getAllRecordsForUpdateMessage(node))
+		saveAuthoritativeRecords(node)
+		listMessage = encodeLISTMessage(message["txid"], getAllRecordsForListMessage(node))
 		printDebug ("LIST to: " + str(address))
 		sent = node.sock.sendto(listMessage.encode("utf-8"), address)
 		node.acks[message["txid"]] = AckRecord(datetime.now(), str(address[0]), str(address[1]), "list")

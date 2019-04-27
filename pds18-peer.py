@@ -16,8 +16,9 @@ readRpcEvent = threading.Event()
 messageEvent = threading.Event()
 checkAcksEvent = threading.Event()
 
-def sendHello(peer, message):
+def sendHello(peer):
 	while not helloEvent.is_set():
+		message = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
 		printDebug ("HELLO to: " + str((peer.regIp, peer.regPort)))
 		sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 		helloEvent.wait(10)
@@ -64,9 +65,8 @@ def sendPeers(peer):
 def findUserInPeerList(peers, user):
 
 	for k,v in peers.items():
-		for k1,v1 in v.items():
-			if v1["username"] == user:
-				return (v1["ipv4"], v1["port"])
+		if v["username"] == user:
+			return (v["ipv4"], v["port"])
 	return None		
 
 def sendMessage(peer, peerList):
@@ -226,8 +226,7 @@ def main():
 
 		signal.signal(signal.SIGINT, signalHandler)
 	
-		helloMessage = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
-		helloThread = threading.Thread(target=sendHello, kwargs={"peer": peer, "message": helloMessage})
+		helloThread = threading.Thread(target=sendHello, kwargs={"peer": peer})
 		helloThread.start()
 
 		readRpcThread = threading.Thread(target=readRpc, kwargs={"file": rpcFileName, "peer": peer})
@@ -253,7 +252,7 @@ def main():
 				elif peer.currentCommand == "peers" and peer.currentPhase == 2:
 					printDebug ("ACK for GETLIST")
 					handleAck(peer, message, datetime.now())
-				elif peer.currentCommand == "message" and peer.currentPhase == 3:
+				elif peer.currentCommand == "message" and peer.currentPhase >= 2:
 					handleAck(peer, message, datetime.now())
 			elif message["type"] == 'list':
 				if peer.currentCommand == "peers" and peer.currentPhase == 2:
@@ -261,13 +260,12 @@ def main():
 					print ("-------------------------------------------------------------------")
 					print ("|PEERS")
 					for k,v in message["peers"].items():
-						for k1,v1 in v.items():
-							print ("|Username: %10s, IP address: %15s, Port: %8d " % (v1["username"], v1["ipv4"], v1["port"]))
+						print ("|Username: %10s, IP address: %15s, Port: %8d " % (v["username"], v["ipv4"], v["port"]))
 					print ("-------------------------------------------------------------------")
-
 					sendAck(peer, message["txid"], address)
 					print ("RPC Peers finished.")
-				elif peer.currentCommand == "message" and peer.currentPhase == 2:
+				elif peer.currentCommand == "message" and peer.currentPhase >= 2:
+					sendAck(peer, message["txid"], address)
 					handleMessage(peer, message['peers'])
 			elif message["type"] == 'message':
 				if message["to"] == peer.username:

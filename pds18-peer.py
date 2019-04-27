@@ -109,6 +109,7 @@ def handleReconnect(peer, args):
 	peer.regIp = newIp
 	peer.regPort = int(newPort)
 	nodeAddress = (peer.regIp, peer.regPort)
+	peer.nodeAddress = nodeAddress
 	message = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
 	sent = peer.sock.sendto(message.encode("utf-8"), nodeAddress)
 	print ("RPC Reconnect finished.")

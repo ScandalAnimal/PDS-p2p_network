@@ -4,10 +4,7 @@ import os
 from parsers import parseRpcArgs
 
 def main():
-	print ("RPC")
-
 	args = parseRpcArgs()
-	print (args)
 
 	fileName = ""
 	if args.peer and args.id:
@@ -30,5 +27,6 @@ def main():
 	except IOError as e:
 		print ('Target peer/node is not running')	
 
+	print ("RPC sent")
 if __name__ == "__main__":
 	main()

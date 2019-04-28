@@ -32,9 +32,9 @@ def handleAck(peer, message, time):
 			exists = True
 			allowed = time - timedelta(seconds=2)
 			if allowed < v.time:
-				printDebug ("ACK ok")
+				printDebug ("ACK ok " + str(message["txid"]))
 			else:
-				printDebug ("ACK not ok")
+				printDebug ("ACK not ok" + str(message["txid"]))
 	if exists:
 		peer.acks[message["txid"]] = AckRecord(time, v.ip, v.port, v.type)
 		peer.toRemove.append(message["txid"])
@@ -45,7 +45,7 @@ def sendGetList(peer):
 	sent = peer.sock.sendto(message.encode("utf-8"), peer.nodeAddress)
 	peer.acks[txid] = AckRecord(datetime.now(), str(peer.nodeAddress[0]), str(peer.nodeAddress[1]), "getlist")
 	peer.currentPhase = 1
-	printDebug ("GETLIST to: " + str(peer.nodeAddress))
+	printDebug ("GETLIST to: " + str(peer.nodeAddress) + ": " + str(txid))
 
 def sendAck(peer, txid, address):
 	ack = encodeACKMessage(txid)
@@ -249,7 +249,7 @@ def main():
 					handleAck(peer, message, datetime.now())
 					print ("RPC Getlist finished.")
 				elif peer.currentCommand == "peers" and peer.currentPhase == 2:
-					printDebug ("ACK for GETLIST")
+					printDebug ("ACK for GETLIST in peers")
 					handleAck(peer, message, datetime.now())
 				elif peer.currentCommand == "message" and peer.currentPhase >= 2:
 					handleAck(peer, message, datetime.now())
@@ -259,7 +259,7 @@ def main():
 					print ("-------------------------------------------------------------------")
 					print ("|PEERS")
 					for k,v in message["peers"].items():
-						print ("|Username: %10s, IP address: %15s, Port: %8d " % (v["username"], v["ipv4"], v["port"]))
+						print ("|Username: %10s, IP address: %15s, Port: %8s " % (v["username"], v["ipv4"], v["port"]))
 					print ("-------------------------------------------------------------------")
 					sendAck(peer, message["txid"], address)
 					print ("RPC Peers finished.")

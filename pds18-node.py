@@ -51,14 +51,14 @@ def printPeerRecords(node):
 	print ("|DATABASE")
 	print ("|Authoritative: ")
 	for k,v in node.peerList.items():
-		print ("|Username: %10s, IP address: %15s, Port: %8d " % (v["username"], v["ipv4"], v["port"]))
+		print ("|Username: %10s, IP address: %15s, Port: %8s " % (v["username"], v["ipv4"], v["port"]))
 	print ("|")	
 	print ("|All: ")
 	for k,v in node.db.items():
 		for k1, v1 in v.items():
 			if isinstance(v1, datetime):
 				continue
-			print ("|Username: %10s, IP address: %15s, Port: %8d " % (v1["username"], v1["ipv4"], v1["port"]))
+			print ("|Username: %10s, IP address: %15s, Port: %8s " % (v1["username"], v1["ipv4"], v1["port"]))
 	print ("-------------------------------------------------------------------")
 
 def getAuthoritativeRecordsForUpdateMessage(node):

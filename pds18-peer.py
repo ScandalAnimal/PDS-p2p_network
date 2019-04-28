@@ -52,7 +52,7 @@ def sendAck(peer, txid, address):
 	printDebug ("ACK: " + str(ack) + ", to: " + str(address[0]) + "," + str(address[1]))
 	sent = peer.sock.sendto(ack.encode("utf-8"), address)
 
-def sendError(node, txid, address, message):
+def sendError(peer, txid, address, message):
 	err = encodeERRORMessage(txid, message)
 	printDebug ("ERROR: " + str(err) + ", to: " + str(address[0]) + "," + str(address[1]))
 	sent = peer.sock.sendto(err.encode("utf-8"), address)
@@ -149,7 +149,7 @@ def handleCommand(command, peer):
 def resetPeerState(peer):
 	peer.currentCommand = None
 	peer.currentCommandParams = []
-	peer.currentPhase = None
+	peer.currentPhase = 0
 
 def readRpc(file, peer):
 	with open(file, 'r') as f:
@@ -174,7 +174,7 @@ class Peer:
 		self.acks = {}
 		self.currentCommand = None
 		self.currentCommandParams = []
-		self.currentPhase = None
+		self.currentPhase = 0
 		self.toRemove = []
 def initSocket(peer):
 	peer.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -240,7 +240,7 @@ def main():
 			try:
 				message = decodeMessage(data.decode("utf-8")).getVars()
 			except ValueError:
-				sendError(node, message["txid"], address, "Cannot parse message.")
+				sendError(peer, message["txid"], address, "Cannot parse message.")
 				continue
 
 			if message["type"] == 'ack':

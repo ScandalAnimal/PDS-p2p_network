@@ -36,7 +36,7 @@ def encode(obj):
     elif isinstance(obj, bytes):
         return str(len(obj)).encode() + b":" + obj
     elif isinstance(obj, str):
-        return encode(obj.encode("ascii"))
+        return encode(obj.encode("utf-8"))
     elif isinstance(obj, list):
         return b"l" + b"".join(map(encode, obj)) + b"e"
     elif isinstance(obj, dict):
@@ -87,7 +87,7 @@ def decode(s):
             raise ValueError("Malformed input.")
 
     if isinstance(s, str):
-        s = s.encode("ascii")
+        s = s.encode("utf-8")
 
     ret, rest = decode_first(s)
     if rest:

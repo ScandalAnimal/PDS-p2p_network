@@ -24,8 +24,6 @@ def signalHandler(signum, frame):
 
 def getRandomId():
 	return random.randint(1,60000)
-	# return str(uuid.uuid4()).replace("-","") 	
-
 
 def decodeBytes(obj):
     if isinstance(obj, bytes):
@@ -34,10 +32,10 @@ def decodeBytes(obj):
     	return obj	
 
 def printCorrectErr(message):
-	print("#STDERR: " + message, file=sys.stderr)
+	print("STDERR: " + message, file=sys.stderr)
 
 def printDebug(message):
-	print("#DEBUG: " + message, file=sys.stderr)	
+	print("DEBUG: " + message, file=sys.stderr)	
 
 def validateIp(s):
     a = s.split('.')

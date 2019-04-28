@@ -117,26 +117,24 @@ def sendUpdate(node):
 				port = splitted[1]
 				if (str(ip) == str(node.regIp)) and (str(port) == str(node.regPort)):
 					continue
-				printDebug ("UPDATE to: " + str(ip) + "," + str(port))	
+				printCorrectErr ("UPDATE to: " + str(ip) + "," + str(port))	
 				txid = getRandomId()
 				message = encodeUPDATEMessage(txid, getAllRecordsForUpdateMessage(node))
 				sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
 			updateEvent.wait(4)
 		except InterruptException:
-			printCorrectErr ("InterruptException in sendUpdate")
 			updateEvent.set()
 			raise InterruptException
 
 def sendConnect(node, args):
 	while not connectEvent.is_set():
 		try:
-			printDebug ("CONNECT to: " + str(args[1]) + "," + str(args[2]))
+			printCorrectErr ("CONNECT to: " + str(args[1]) + "," + str(args[2]))
 			txid = getRandomId()
 			message = encodeUPDATEMessage(txid, getAuthoritativeRecordsForUpdateMessage(node))
 			sent = node.sock.sendto(message.encode("utf-8"), (args[1], int(args[2])))
 			connectEvent.set()
 		except InterruptException:
-			printCorrectErr ("InterruptException in sendConnect")
 			connectEvent.set()
 			raise InterruptException
 
@@ -149,7 +147,7 @@ def sendDisconnect(node):
 				port = splitted[1]
 				if (str(ip) == str(node.regIp)) and (str(port) == str(node.regPort)):
 					continue
-				printDebug ("DISCONNECT to: " + str(ip) + "," + str(port))
+				printCorrectErr ("DISCONNECT to: " + str(ip) + "," + str(port))
 				txid = getRandomId()
 				message = encodeDISCONNECTMessage(txid)
 				sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
@@ -162,7 +160,6 @@ def sendDisconnect(node):
 			disconnectEvent.set()
 
 		except InterruptException:
-			printCorrectErr ("InterruptException in sendDisconnect")
 			disconnectEvent.set()
 			raise InterruptException			
 
@@ -181,7 +178,6 @@ def handleSync(node):
 			message = encodeUPDATEMessage(txid, getAllRecordsForUpdateMessage(node))
 			sent = node.sock.sendto(message.encode("utf-8"), (ip, int(port)))
 	except InterruptException:
-		printCorrectErr ("InterruptException in handleSync")
 		raise InterruptException
 	finally:
 		print ("RPC Sync finished.")
@@ -210,7 +206,6 @@ def handleCommand(command, node):
 			connectThread = threading.Thread(target=sendConnect, kwargs={"node": node, "args": args})
 			connectThread.start()
 		except InterruptException:
-			printCorrectErr ("InterruptException in handleCommand")
 			connectEvent.set()
 			connectThread.join()
 			raise InterruptException
@@ -228,13 +223,14 @@ def handleCommand(command, node):
 			disconnectThread = threading.Thread(target=sendDisconnect, kwargs={"node": node})
 			disconnectThread.start()
 		except InterruptException:
-			printCorrectErr ("InterruptException in handleCommand")
 			disconnectEvent.set()
 			disconnectThread.join()
 			raise InterruptException
 		finally:
 			disconnectEvent.clear()
 			print ("RPC Disconnect finished.")
+	else:
+		printCorrectErr ("RPC command not recognized: " + str(command))			
 
 def readRpc(file, node):
 	with open(file, 'r') as f:
@@ -279,15 +275,15 @@ def handleAck(node, message, time):
 			exists = True
 			allowed = time - timedelta(seconds=2)
 			if allowed < v.time:
-				printDebug ("ACK ok")
+				printCorrectErr ("ACK ok " + str(message["txid"]))
 			else:
-				printDebug ("ACK not ok - after timeout")
+				printCorrectErr ("ACK not ok" + str(message["txid"]))
 	if exists:
 		node.acks[message["txid"]] = AckRecord(time, v.ip, v.port, v.type)
 		node.toRemove.append(message["txid"])
 
 def handleHello(node, message):
-	printDebug ("HELLO from: " + str(message["ipv4"]) + "," + str(message["port"]))
+	printCorrectErr ("HELLO from: " + str(message["ipv4"]) + "," + str(message["port"]))
 				
 	duplicity = False
 	toDelete = False
@@ -310,20 +306,20 @@ def handleHello(node, message):
 
 def sendAck(node, txid, address):
 	ack = encodeACKMessage(txid)
-	printDebug ("ACK: " + str(ack) + ", to: " + str(address[0]) + "," + str(address[1]))
+	printCorrectErr ("ACK: " + str(ack) + ", to: " + str(address[0]) + "," + str(address[1]))
 	sent = node.sock.sendto(ack.encode("utf-8"), address)
 
 def sendError(node, txid, address, message):
 	err = encodeERRORMessage(txid, message)
-	printDebug ("ERROR: " + str(err) + ", to: " + str(address[0]) + "," + str(address[1]))
+	printCorrectErr ("ERROR: " + str(err) + ", to: " + str(address[0]) + "," + str(address[1]))
 	sent = node.sock.sendto(err.encode("utf-8"), address)
 
 def handleGetList(node, message, address):
-	printDebug ("GETLIST from: " + str(address))
+	printCorrectErr ("GETLIST from: " + str(address))
 
 	while not getListEvent.is_set():
 		if not isPeer(node, address):
-			printCorrectErr ("GETLIST is from foreign peer, killing it")
+			printCorrectErr ("GETLIST is from foreign peer, sending error.")
 			getListEvent.set()
 			sendError(node, message["txid"], address, "You tried to get peer list from node that you are not paired with.")
 			break
@@ -331,7 +327,7 @@ def handleGetList(node, message, address):
 
 		saveAuthoritativeRecords(node)
 		listMessage = encodeLISTMessage(message["txid"], getAllRecordsForListMessage(node))
-		printDebug ("LIST to: " + str(address))
+		printCorrectErr ("LIST to: " + str(address))
 		sent = node.sock.sendto(listMessage.encode("utf-8"), address)
 		node.acks[message["txid"]] = AckRecord(datetime.now(), str(address[0]), str(address[1]), "list")
 		getListEvent.set()		
@@ -388,7 +384,7 @@ def checkAcks(node):
 				toDelete = k
 				break
 		if toDelete != 0:
-			print ("Failed to get ACK for: " + node.acks[toDelete].type + " from: " + node.acks[toDelete].ip + ":" + node.acks[toDelete].port)
+			printCorrectErr ("Failed to get ACK for: " + node.acks[toDelete].type + " from: " + node.acks[toDelete].ip + ":" + node.acks[toDelete].port)
 			del node.acks[toDelete]
 		checkAcksEvent.wait(0.5)
 
@@ -399,6 +395,7 @@ def main():
 	args = parseNodeArgs()
 	node = Node(args)
 	rpcFilePath = ""
+	print ("Starting node.")
 	try:
 
 		rpcFileName = "node" + str(node.id)
@@ -430,6 +427,7 @@ def main():
 				message = decodeMessage(data.decode("utf-8")).getVars()
 			except ValueError:
 				sendError(node, message["txid"], address, "Cannot parse message.")
+				printCorrectErr ("Got message you cannot parse.")
 				continue
 
 			if message["type"] == "hello":
@@ -439,7 +437,6 @@ def main():
 					getListThread = threading.Thread(target=handleGetList, kwargs={"node": node, "message": message, "address": address})
 					getListThread.start()
 				except InterruptException:
-					print ("InterruptException")
 					getListEvent.set()
 					getListThread.join()
 					raise InterruptException
@@ -448,17 +445,17 @@ def main():
 			elif message["type"] == "ack":
 				handleAck(node, message, datetime.now())
 			elif message["type"] == "update":
-				printDebug("UPDATE from: " + str(address[0]) + "," + str(address[1]))
+				printCorrectErr ("UPDATE from: " + str(address[0]) + "," + str(address[1]))
 				handleUpdate(node, message, address)
 			elif message["type"] == "disconnect":	
-				printDebug ("DISCONNECT from: " + str(address[0]) + "," + str(address[1]))
+				printCorrectErr ("DISCONNECT from: " + str(address[0]) + "," + str(address[1]))
 				handleDisconnect(node, message["txid"], address)
 			elif message["type"] == "error":
 				handleError(node, message, address)
 			else:
 				printCorrectErr ("Unexpected message: " + str(message))	
 	except UniqueIdException:
-		printCorrectErr ("UniqueIdException")
+		printCorrectErr ("You tried to create peer with existing id.")
 	
 	except InterruptException:
 		peerCheckEvent.set()
@@ -471,7 +468,6 @@ def main():
 		sendDisconnect(node)
 		disconnectEvent.set()
 		updateEvent.set()
-		printCorrectErr ("InterruptException")
 	finally:
 		if os.path.isfile(rpcFilePath):
 			os.remove(rpcFilePath)

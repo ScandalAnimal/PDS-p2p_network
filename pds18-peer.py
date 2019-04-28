@@ -18,11 +18,11 @@ checkAcksEvent = threading.Event()
 def sendHello(peer):
 	while not helloEvent.is_set():
 		message = encodeHELLOMessage(getRandomId(), peer.username, peer.chatIp, peer.chatPort)
-		printDebug ("HELLO to: " + str((peer.regIp, peer.regPort)))
+		printCorrectErr ("HELLO to: " + str((peer.regIp, peer.regPort)))
 		sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 		helloEvent.wait(10)
 	message = encodeHELLOMessage(getRandomId(), peer.username, "0.0.0.0", 0)
-	printDebug ("HELLO to: " + str((peer.regIp, peer.regPort)))
+	printCorrectErr ("HELLO to: " + str((peer.regIp, peer.regPort)))
 	sent = peer.sock.sendto(message.encode("utf-8"), (peer.regIp, peer.regPort))
 
 def handleAck(peer, message, time):
@@ -32,9 +32,9 @@ def handleAck(peer, message, time):
 			exists = True
 			allowed = time - timedelta(seconds=2)
 			if allowed < v.time:
-				printDebug ("ACK ok " + str(message["txid"]))
+				printCorrectErr ("ACK ok " + str(message["txid"]))
 			else:
-				printDebug ("ACK not ok" + str(message["txid"]))
+				printCorrectErr ("ACK not ok" + str(message["txid"]))
 	if exists:
 		peer.acks[message["txid"]] = AckRecord(time, v.ip, v.port, v.type)
 		peer.toRemove.append(message["txid"])
@@ -45,16 +45,16 @@ def sendGetList(peer):
 	sent = peer.sock.sendto(message.encode("utf-8"), peer.nodeAddress)
 	peer.acks[txid] = AckRecord(datetime.now(), str(peer.nodeAddress[0]), str(peer.nodeAddress[1]), "getlist")
 	peer.currentPhase = 1
-	printDebug ("GETLIST to: " + str(peer.nodeAddress) + ": " + str(txid))
+	printCorrectErr ("GETLIST to: " + str(peer.nodeAddress) + ": " + str(txid))
 
 def sendAck(peer, txid, address):
 	ack = encodeACKMessage(txid)
-	printDebug ("ACK: " + str(ack) + ", to: " + str(address[0]) + "," + str(address[1]))
+	printCorrectErr ("ACK: " + str(ack) + ", to: " + str(address[0]) + "," + str(address[1]))
 	sent = peer.sock.sendto(ack.encode("utf-8"), address)
 
 def sendError(peer, txid, address, message):
 	err = encodeERRORMessage(txid, message)
-	printDebug ("ERROR: " + str(err) + ", to: " + str(address[0]) + "," + str(address[1]))
+	printCorrectErr ("ERROR: " + str(err) + ", to: " + str(address[0]) + "," + str(address[1]))
 	sent = peer.sock.sendto(err.encode("utf-8"), address)
 
 def sendPeers(peer):
@@ -72,12 +72,11 @@ def sendMessage(peer, peerList):
 	while not messageEvent.is_set():
 		to = peer.currentCommandParams[2]
 		contents = peer.currentCommandParams[3]
-		print (contents)
 		recipientAddress = findUserInPeerList(peerList, to)
 		if recipientAddress:
 			txid = getRandomId()
 			message = encodeMESSAGEMessage(txid, peer.username, to, contents)
-			printDebug ("MESSAGE to: " + str(recipientAddress) + ": " + message)
+			printCorrectErr ("MESSAGE to: " + str(recipientAddress) + ": " + message)
 			sent = peer.sock.sendto(message.encode("utf-8"), recipientAddress)
 			peer.acks[txid] = AckRecord(datetime.now(), str(recipientAddress[0]), str(recipientAddress[1]), "message")
 			peer.currentPhase = 3
@@ -91,7 +90,6 @@ def handleMessage(peer, peerList):
 		messageThread = threading.Thread(target=sendMessage, kwargs={"peer": peer, "peerList": peerList})
 		messageThread.start()
 	except InterruptException:
-		printCorrectErr ("InterruptException in handleCommand")
 		messageEvent.set()
 		messageThread.join()
 		raise InterruptException
@@ -114,7 +112,7 @@ def handleReconnect(peer, args):
 	print ("RPC Reconnect finished.")
 
 def handleCommand(command, peer):
-	printDebug ("RPC command: " + str(command))
+	printCorrectErr ("RPC command: " + str(command))
 	if isCommand("getlist", command):
 		peer.currentCommand = "getlist"
 		sendGetList(peer)
@@ -132,7 +130,6 @@ def handleCommand(command, peer):
 				messageThread = threading.Thread(target=sendPeers, kwargs={"peer": peer})
 				messageThread.start()
 			except InterruptException:
-				printCorrectErr ("InterruptException in handleCommand")
 				messageEvent.set()
 				messageThread.join()
 				raise InterruptException
@@ -144,7 +141,7 @@ def handleCommand(command, peer):
 		args = command.split()
 		handleReconnect(peer, args)
 	else:
-		printDebug ("Command not recognized: " + str(command))	
+		printCorrectErr ("RPC command not recognized: " + str(command))	
 
 def resetPeerState(peer):
 	peer.currentCommand = None
@@ -199,7 +196,7 @@ def checkAcks(peer):
 				toDelete = k
 				break
 		if toDelete != 0:
-			print ("Failed to get ACK for: " + peer.acks[toDelete].type + " from: " + peer.acks[toDelete].ip + ":" + peer.acks[toDelete].port)
+			printCorrectErr ("Failed to get ACK for: " + peer.acks[toDelete].type + " from: " + peer.acks[toDelete].ip + ":" + peer.acks[toDelete].port)
 			del peer.acks[toDelete]
 		checkAcksEvent.wait(0.5)	
 
@@ -212,6 +209,7 @@ def main():
 	args = parsePeerArgs()
 	peer = Peer(args)
 	rpcFilePath = ""
+	print ("Starting peer.")
 	try:
 
 		rpcFileName = "peer" + str(peer.id)
@@ -241,21 +239,20 @@ def main():
 				message = decodeMessage(data.decode("utf-8")).getVars()
 			except ValueError:
 				sendError(peer, message["txid"], address, "Cannot parse message.")
+				printCorrectErr ("Got message you cannot parse.")
 				continue
 
 			if message["type"] == 'ack':
 				if peer.currentCommand == "getlist" and peer.currentPhase == 1:
-					printDebug ("ACK for GETLIST")
 					handleAck(peer, message, datetime.now())
 					print ("RPC Getlist finished.")
 				elif peer.currentCommand == "peers" and peer.currentPhase == 2:
-					printDebug ("ACK for GETLIST in peers")
 					handleAck(peer, message, datetime.now())
 				elif peer.currentCommand == "message" and peer.currentPhase >= 2:
 					handleAck(peer, message, datetime.now())
 			elif message["type"] == 'list':
 				if peer.currentCommand == "peers" and peer.currentPhase == 2:
-					printDebug ("LIST from: " + str(address))
+					printCorrectErr ("LIST from: " + str(address))
 					print ("-------------------------------------------------------------------")
 					print ("|PEERS")
 					for k,v in message["peers"].items():
@@ -268,7 +265,7 @@ def main():
 					handleMessage(peer, message['peers'])
 			elif message["type"] == 'message':
 				if message["to"] == peer.username:
-					printDebug ("MESSAGE from: " + str(address[0]) + "," + str(address[1]) + ": " + message["message"])
+					printCorrectErr ("MESSAGE from: " + str(address[0]) + "," + str(address[1]) + ": " + message["message"])
 					sendAck(peer, message["txid"], address)
 				else:
 					printCorrectErr ("You got message for different recipient")
@@ -279,10 +276,9 @@ def main():
 				printCorrectErr ("Unexpected message: " + str(message))	
 
 	except UniqueIdException:
-		printCorrectErr ("UniqueIdException")
+		printCorrectErr ("You tried to create peer with existing id.")
 
 	except InterruptException:
-		printCorrectErr ("InterruptException")
 		helloEvent.set()
 		helloThread.join()
 		readRpcEvent.set()

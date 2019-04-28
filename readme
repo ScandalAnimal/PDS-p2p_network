@@ -56,3 +56,16 @@ Loginy spolužiakov pri testovaní:
 	xurban61 - python
 	xkiral01 - python
 	xmatej51 - python
+
+Odovzdávané súbory:
+	vlastné:
+		pds18-peer.py
+		pds18-node.py
+		pds18-rpc.py
+		parsers.py
+		protocol.py
+		util.py
+		Makefile
+		dokumentace.pdf
+	prevzané:
+		bencoder.py (z https://github.com/utdemir/bencoder)	
